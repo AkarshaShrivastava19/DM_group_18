@@ -106,20 +106,6 @@ CREATE TABLE IF NOT EXISTS category (
 
 ```
 
-#Creating Delivery Table
-```{sql, eval=FALSE, connection = connection}
-CREATE TABLE IF NOT EXISTS delivery ( 
-
-    delivery_id VARCHAR(20) PRIMARY KEY, 
-    customer_id VARCHAR(20) NOT NULL,
-    delivery_status VARCHAR(20) NOT NULL,
-    customer_name VARCHAR(20) NOT NULL,
-    FOREIGN KEY ('customer_id') REFERENCES customer('customer_id')
-
-);
-
-```
-
 #Creating Promotion Table
 ```{sql, eval=FALSE, connection = connection}
 CREATE TABLE IF NOT EXISTS promotion ( 
@@ -138,11 +124,11 @@ CREATE TABLE IF NOT EXISTS promotion (
 ```{sql, eval=FALSE, connection = connection}
 CREATE TABLE IF NOT EXISTS product ( 
 
-    product_id VARCHAR(50) PRIMARY KEY, 
-    category_id VARCHAR(50) NOT NULL,
-    supplier_id VARCHAR(50) NOT NULL, 
-    promotion_id VARCHAR(50) NULL, 
-    product_name VARCHAR(50) NOT NULL,
+    product_id VARCHAR(20) PRIMARY KEY, 
+    category_id VARCHAR(20) NOT NULL,
+    supplier_id VARCHAR(20) NOT NULL, 
+    promotion_id VARCHAR(20) NULL, 
+    product_name VARCHAR(20) NOT NULL,
     price INT NOT NULL,
     quantity_stock INT NOT NULL,
     quantity_supplied INT NOT NULL, 
@@ -155,24 +141,41 @@ CREATE TABLE IF NOT EXISTS product (
 
 ```
 
+#Creating Shipment Table
+```{sql, eval=FALSE, connection = connection}
+
+CREATE TABLE IF NOT EXISTS shipment ( 
+
+    shipment_id VARCHAR(20) PRIMARY KEY, 
+    shipment_status VARCHAR(20) NOT NULL
+);
+    
+```
+
 #Creating Orders Table
 ```{sql, eval=FALSE, connection = connection}
 
 CREATE TABLE IF NOT EXISTS orders ( 
 
-    order_id VARCHAR(50) NOT NULL, 
+    order_id VARCHAR(20) NOT NULL, 
     product_id VARCHAR(20) NOT NULL,
-    customer_id VARCHAR(50) NOT NULL,
+    customer_id VARCHAR(20) NOT NULL,
+    shipment_id VARCHAR(20) NOT NULL,
+    order_status VARCHAR(20) NOT NULL,
+    refund_status VARCHAR(20) NOT NULL,
+    quantity INT NOT NULL,
    /*quantity INT NOT NULL,
    refund_status BOOLEAN NOT NULL, */
     FOREIGN KEY ('customer_id') REFERENCES customer('customer_id'), 
     FOREIGN KEY ('product_id') REFERENCES product('product_id'),
-    PRIMARY KEY (order_id,product_id,customer_id)
+    FOREIGN KEY ('shipment_id') REFERENCES shipment('shipment_id')
+    PRIMARY KEY (order_id,product_id,customer_id,shipment_id)
 
 
-);
+)
 
 ```
+
 
 #Listing tables from the database that we created
 
@@ -190,13 +193,14 @@ load_data_to_db <- function(filename, db_table_name, connection) {
   dbWriteTable(connection, db_table_name, data, append = TRUE, row.names = FALSE)
 }
 
-customer_table <- read.csv('data_upload/customer.csv')
-load_data_to_db("customer_table", "customer",connection)
-load_data_to_db("data_upload/supplier.csv", "supplier", connection)
-load_data_to_db("data_upload/category.csv", "category", connection)
-load_data_to_db("data_upload/delivery.csv", "delivery", connection)
-load_data_to_db("data_upload/promotion.csv", "promotion", connection)
-load_data_to_db("data_upload/product.csv", "product", connection)
+# load_data_to_db("data_upload/customer.csv", "customer",connection)
+# load_data_to_db("data_upload/supplier.csv", "supplier", connection)
+# load_data_to_db("data_upload/category.csv", "category", connection)
+# load_data_to_db("data_upload/shipment.csv", "shipment", connection)
+# load_data_to_db("data_upload/promotion.csv", "promotion", connection)
+# load_data_to_db("data_upload/product.csv", "product", connection)
+load_data_to_db("data_upload/orders.csv", "orders", connection)
+
 
 ```
 
