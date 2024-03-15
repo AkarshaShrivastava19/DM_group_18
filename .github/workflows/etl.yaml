@@ -29,25 +29,11 @@ jobs:
       - name: Execute R script
         run: |
           Rscript R/load_data.R
-
-      - name: Check for changes
-        id: git-check
-        run: |
-          if [ -z "$(git status --porcelain)" ]; then
-            echo "No changes to commit."
-            echo "::set-output name=changes::false"
-          else
-            echo "Changes detected."
-            echo "::set-output name=changes::true"
-          fi
-          
       - name: Add files
-        if: steps.git-check.outputs.changes == 'true'
         run: |
           git config --global user.email "akarsha.shrivastava@warwick.ac.uk"
           git config --global user.name "Akarsha"
-          git add ecomdata.db
-          
+          git add ecomdata.db          
       - name: Commit files
         if: steps.git-check.outputs.changes == 'true'
         run: |
