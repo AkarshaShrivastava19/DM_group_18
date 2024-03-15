@@ -35,11 +35,9 @@ jobs:
           git config --global user.name "Akarsha"
           git add ecomdata.db          
       - name: Commit files
-        if: steps.git-check.outputs.changes == 'true'
         run: |
           git commit -m "Update database"
       - name: Push changes
-        if: steps.git-check.outputs.changes == 'true'
         uses: ad-m/github-push-action@v0.6.0
         with:
             github_token: ${{ secrets.GITHUB_TOKEN }}
