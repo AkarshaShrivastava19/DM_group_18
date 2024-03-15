@@ -170,7 +170,6 @@ for (variable in all_files) {
 
 
 
-
 #Disconnecting from Database
 RSQLite::dbDisconnect(connection)
 
