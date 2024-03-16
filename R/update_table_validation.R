@@ -54,5 +54,6 @@ for (table_name in names(ecom_tables)) {
         })
       }
     }
+    
   }
 }
