@@ -32,9 +32,10 @@ jobs:
       - name: Add files
         run: |
           git config --global user.email "akarsha.shrivastava@warwick.ac.uk"
-          git config --global user.name "Akarsha"         
+          git config --global user.name "Akarsha"
       - name: Commit files
         run: |
+          git add ecomdata.db
           git commit -m "Update database"
       - name: Push changes
         uses: ad-m/github-push-action@v0.6.0
