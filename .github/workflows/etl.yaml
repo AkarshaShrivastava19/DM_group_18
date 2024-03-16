@@ -32,7 +32,7 @@ jobs:
       - name: Add files
         run: |
           git config --global user.email "akarsha.shrivastava@warwick.ac.uk"
-          git config --global user.name "Akarsha"
+          git config --global user.name "AkarshaShrivastava19"
       - name: Commit files
         run: |
           git add ecomdata.db
