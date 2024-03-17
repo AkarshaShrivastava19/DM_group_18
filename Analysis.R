@@ -1,26 +1,3 @@
----
-title: "Data Management Assignment Group 18"
-editor: visual
-format:
-  pdf:
-    toc: true
-    toc-depth: 3
-    wrap: auto
-  docx:
-    toc: true
----
-
-# Introduction
-
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
-
-# Part 1
-
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
-
-# Basic Analysis
-
-```{r Library the packages}
 library(DBI)
 library(RSQLite)
 library(readr)
@@ -28,11 +5,8 @@ library(dplyr)
 library(lubridate)
 library(ggplot2)
 library(tidyr)
-library(knitr)
-```
 
-```{r Library Packages}
-#Connecting to the database
+# Connecting to the database
 connection <- RSQLite::dbConnect(RSQLite::SQLite(), "ecomdata.db")
 
 # Retrieve data from the database
@@ -43,13 +17,11 @@ category <- dbGetQuery(connection, "SELECT * FROM category")
 shipment <- dbGetQuery(connection, "SELECT * FROM shipment")
 promotion <- dbGetQuery(connection, "SELECT * FROM promotion")
 orders <- dbGetQuery(connection, "SELECT * FROM orders")
-```
 
+# Basic Analysis
 ## Customer Profile
-
 ### The distribution of customer's gender
-
-```{sql, eval=TRUE, connection = connection}
+dbExecute(connection, "
 SELECT 
     gender, 
     COUNT(*) AS GenderCount,
@@ -60,37 +32,50 @@ GROUP BY
     gender
 ORDER BY 
     Percentage DESC;
-```
+")
 
 ### The Distribution of Customer's Age
-
-```{sql, eval=TRUE, connection = connection}
+dbExecute(connection, "
 SELECT 
-    AgeGroup, 
-    COUNT(*) AS Count,
-    CONCAT(ROUND((COUNT(*) * 100.0) / (SELECT COUNT(*) FROM customer), 2), '%') AS Percentage
+AgeGroup, 
+COUNT(*) AS Count,
+CONCAT(ROUND((COUNT(*) * 100.0) / (SELECT COUNT(*) FROM customer), 2), '%') AS Percentage
 FROM (
-    SELECT 
-        customer_id,
-        CASE
-            WHEN age >= 0 AND age < 18 THEN '0-18'
-            WHEN age >= 18 AND age < 30 THEN '19-30'
-            WHEN age >= 30 AND age < 40 THEN '31-40'
-            WHEN age >= 40 AND age < 50 THEN '41-50'
-            WHEN age >= 50 AND age < 60 THEN '51-60'
-            WHEN age >= 60 AND age < 70 THEN '61-70'
-            WHEN age >= 70 THEN '71+'
-            ELSE 'Unknown'
-        END AS AgeGroup
-    FROM customer
+  SELECT 
+  customer_id,
+  CASE
+  WHEN age >= 0 AND age < 18 THEN '0-18'
+  WHEN age >= 18 AND age < 30 THEN '19-30'
+  WHEN age >= 30 AND age < 40 THEN '31-40'
+  WHEN age >= 40 AND age < 50 THEN '41-50'
+  WHEN age >= 50 AND age < 60 THEN '51-60'
+  WHEN age >= 60 AND age < 70 THEN '61-70'
+  WHEN age >= 70 THEN '71+'
+  ELSE 'Unknown'
+  END AS AgeGroup
+  FROM customer
 ) AS AgeCategories
 GROUP BY AgeGroup
 ORDER BY Count DESC;
-```
+")
 
 ### The Distribution of Customer's Career (Top 10)
+dbExecute(connection, "
+SELECT 
+career, 
+COUNT(*) AS CareerCount,
+CONCAT(ROUND((COUNT(*) * 100.0) / (SELECT COUNT(*) FROM customer), 2), '%') AS Percentage
+FROM 
+customer
+GROUP BY 
+career
+ORDER BY 
+CareerCount DESC
+LIMIT 10;
+")
 
-```{sql, eval=TRUE, connection = connection}
+### The Distribution of Customer's Career (Top 10)
+dbExecute(connection, "
 SELECT 
     career, 
     COUNT(*) AS CareerCount,
@@ -102,11 +87,10 @@ GROUP BY
 ORDER BY 
     CareerCount DESC
 LIMIT 10;
-```
+")
 
 ### The Distribution of Customer's Geographic Location (Top 10)
-
-```{sql, eval=TRUE, connection = connection}
+dbExecute(connection, "
 SELECT 
     address_city, 
     COUNT(*) AS CityCount,
@@ -118,9 +102,8 @@ GROUP BY
 ORDER BY 
     CityCount DESC
 LIMIT 10;
-```
+")
 
-```{r Geographical Distribution of Customers}
 # Group by city and count the number of customer in each city
 customer_city_count <- customer %>%
   group_by(address_city) %>%
@@ -152,24 +135,20 @@ filename <- paste0("geographical distribution of customers_",
 
 # Save the plot with the dynamic filename
 ggsave(filename, plot = g_customer, width = width, height = height)
-```
 
 ### The Current Customer Referral Rate
-
-```{sql, eval=TRUE, connection = connection}
+dbExecute(connection, "
 SELECT 
     COUNT(CASE WHEN referred_by != '' AND referred_by IS NOT NULL THEN 1 END) AS Customer_with_Referral,
     COUNT(*) AS total_customer,
     CONCAT(ROUND((COUNT(CASE WHEN referred_by != '' AND referred_by IS NOT NULL THEN 1 END) * 100.0 / COUNT(*)), 2), '%') AS referral_rate
 FROM 
     customer;
-```
+")
 
 ## Product Portfolio
-
 ### The Distribution of Product's Review Score (Top 10)
-
-```{sql, eval=TRUE, connection = connection}
+dbExecute(connection, "
 SELECT 
     product_name, review_score
 FROM 
@@ -177,11 +156,9 @@ FROM
 ORDER BY 
     review_score DESC
 LIMIT 10;
-```
+")
 
 ### The Product Number supplied by Different Suppliers
-
-```{r the product number supplied by supplier}
 # Perform an inner join to combine 'product' with 'supplier' on 'supplier_id'
 joint_supplier_product <- inner_join(product, supplier, by = "supplier_id")
 
@@ -209,33 +186,28 @@ filename <- paste0("the product number supplied by supplier_", format(Sys.time()
 
 # Save the plot with the dynamic filename
 ggsave(filename, plot = g_supplier, width = width, height = height)
-```
 
 ### The Product's Review Score of Different Suppliers (Top Best 5)
-
-```{sql, eval=TRUE, connection = connection}
+dbExecute(connection, "
 SELECT s.supplier_name, ROUND(AVG(p.review_score), 2) AS average_review_score
 FROM product p
 JOIN supplier s ON p.supplier_id = s.supplier_id
 GROUP BY s.supplier_name
 ORDER BY average_review_score DESC
 LIMIT 5;
-```
+")
 
 ### The Product's Review Score of Different Suppliers (Top Worst 5)
-
-```{sql, eval=TRUE, connection = connection}
+dbExecute(connection, "
 SELECT s.supplier_name, ROUND(AVG(p.review_score), 2) AS average_review_score
 FROM product p
 JOIN supplier s ON p.supplier_id = s.supplier_id
 GROUP BY s.supplier_name
 ORDER BY average_review_score ASC
 LIMIT 5;
-```
+")
 
 ### The Top 10 Popular Product
-
-```{r Top 10 Popular Products}
 # Perform an inner join to combine 'orders' with 'product' on 'product_id'
 joint_order_product <- inner_join(orders, product, by = "product_id")
 
@@ -272,13 +244,10 @@ filename <- paste0("top10_products_by_quantity_", format(Sys.time(), "%Y%m%d_%H%
 
 # Save the plot with the dynamic filename
 ggsave(filename, plot = g_topproduct, width = width, height = height)
-```
 
 ## Sales Analysis
-
 ### Order Refund Rate
-
-```{sql, eval=TRUE, connection = connection}
+dbExecute(connection, "
 SELECT 
     COUNT(CASE WHEN refund_status = 'yes' THEN 1 END) AS refund_orders,
     COUNT(*) AS total_orders,
@@ -287,13 +256,9 @@ FROM (
     SELECT DISTINCT order_id, refund_status
     FROM orders
 ) AS unique_orders;
-```
+")
 
-# Advanced Analysis
-
-### Promotion Discount Trend
-
-```{r promotion discount trend & promotion count trend}
+## Promotion Discount Trend
 # Convert Date Format
 promotion <- promotion %>%
   mutate(promotion_start_date = as.Date(promotion_start_date),
@@ -336,11 +301,8 @@ filename <- paste0("promotion_discount_trend_", format(Sys.time(), "%Y%m%d_%H%M%
 
 # Save the plot with the dynamic filename
 ggsave(filename, plot = g_promotionvalue, width = width, height = height)
-```
 
-### Promotion Count Trend
-
-```{r Promotion Count Trend}
+## Promotion Count Trend
 # Calculate the number of times a promotion appears in each month
 promotion_counts <- data_expanded %>%
   count(year, month)
@@ -362,11 +324,8 @@ filename <- paste0("promotion_number_trend_", format(Sys.time(), "%Y%m%d_%H%M%S"
 
 # Save the plot with the dynamic filename
 ggsave(filename, plot = g_promotioncount, width = width, height = height)
-```
 
-### Monthly Revenue Trend
-
-```{r Revenue in each month}
+## Monthly Revenue Trend
 # Preprocessed date formats
 orders <- orders %>% mutate(order_date = as.Date(order_date))
 promotion <- promotion %>%
@@ -415,11 +374,8 @@ filename <- paste0("monthly_revenue_",
 
 # Save the plot with the dynamic filename
 ggsave(filename, plot = g_monthlyrevenue, width = width, height = height)
-```
 
-### Monthly Best-Selling Products
-
-```{r Best-Selling Products by Month}
+## Monthly Best-Selling Products
 # Calculate total monthly revenue per product
 monthly_product_revenue <- order_products_promotions %>%
   mutate(month = floor_date(order_date, "month")) %>%
@@ -452,9 +408,8 @@ filename <- paste0("monthly_bestseller_product_",
 
 # Save the plot with the dynamic filename
 ggsave(filename, plot = g_bestseller_product_monthly, width = width, height = height)
-```
 
-```{r Create a table to visualized the result}
+# Create a table to visualize
 best_selling_products_each_month$month <- as.Date(best_selling_products_each_month$month, "%Y-%m-%d")
 
 best_selling_products_each_month$YearMonth <- format(best_selling_products_each_month$month, "%Y-%m")
@@ -469,11 +424,7 @@ table_to_display <- best_selling_products_each_month %>%
 # Display the table with kable
 kable(table_to_display, caption = "Monthly Best-Selling Products", col.names = c("Time", "Product Name", "Total Revenue"))
 
-```
-
-### Monthly Shipping Efficiency
-
-```{r Monthly Shipping Efficiency}
+## Monthly Shipping Efficiency
 # Convert dates to Date objects
 orders$order_date <- as.Date(orders$order_date)
 shipment$shipment_date <- as.Date(shipment$shipment_date)
@@ -502,7 +453,7 @@ table_to_display <- monthly_stats %>%
 kable(table_to_display, caption = "Monthly Shipping Duration", col.names = c("Time", "Average Duration", "Min Duration", "Max Duration"))
 
 # Visualize the statistics
-g_shiping_efficiency <- ggplot(monthly_stats, aes(x = month)) +
+ggplot(monthly_stats, aes(x = month)) +
   geom_line(aes(y = Average_Shipping_Duration), color = "steelblue", size = 1) +
   geom_text(aes(y = Average_Shipping_Duration, 
                 label = sprintf("%.2f", Average_Shipping_Duration)), 
@@ -520,11 +471,8 @@ filename <- paste0("monthly_shiping_efficiency_",
 
 # Save the plot with the dynamic filename
 ggsave(filename, plot = g_shiping_efficiency, width = width, height = height)
-```
 
-### Monthly Delivery Efficiency
-
-```{r Monthly Delivery Efficiency}
+## Monthly Delivery Efficiency
 # Convert dates to Date objects
 shipment$delivery_date <- as.Date(shipment$delivery_date)
 
@@ -552,7 +500,7 @@ table_to_display <- monthly_stats %>%
 kable(table_to_display, caption = "Monthly Delivery Duration", col.names = c("Time", "Average Duration", "Min Duration", "Max Duration"))
 
 # Visualize the statistics
-ggplot(monthly_stats, aes(x = month)) +
+g_delivery_efficiency <- ggplot(monthly_stats, aes(x = month)) +
   geom_line(aes(y = Average_Delivery_Duration), color = "steelblue", size = 1) +
   geom_text(aes(y = Average_Delivery_Duration, 
                 label = sprintf("%.2f", Average_Delivery_Duration)), 
@@ -563,4 +511,10 @@ ggplot(monthly_stats, aes(x = month)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(title = "Monthly Delivery Duration",
        x = "Month", y = "Delivery Duration (days)")
-```
+
+# Dynamically generate filename with current date and time
+filename <- paste0("monthly_delivery_efficiency_", 
+                   format(Sys.time(), "%Y%m%d_%H%M%S"), ".png")
+
+# Save the plot with the dynamic filename
+ggsave(filename, plot = g_shiping_efficiency, width = width, height = height)
