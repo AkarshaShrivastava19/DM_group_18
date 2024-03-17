@@ -43,6 +43,7 @@ category <- dbGetQuery(connection, "SELECT * FROM category")
 shipment <- dbGetQuery(connection, "SELECT * FROM shipment")
 promotion <- dbGetQuery(connection, "SELECT * FROM promotion")
 orders <- dbGetQuery(connection, "SELECT * FROM orders")
+
 ```
 
 ## Customer Profile

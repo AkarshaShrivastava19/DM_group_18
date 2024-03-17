@@ -379,3 +379,5 @@ filename <- paste0("monthly_revenue_",
 
 # Save the plot with the dynamic filename
 ggsave(filename, plot = g_monthlyrevenue, width = width, height = height)
+
+RSQLite::dbDisconnect(connection)
