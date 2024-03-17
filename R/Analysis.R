@@ -5,6 +5,7 @@ library(dplyr)
 library(lubridate)
 library(ggplot2)
 library(tidyr)
+library(knitr)
 
 # Connecting to the database
 connection <- RSQLite::dbConnect(RSQLite::SQLite(), "ecomdata.db")
