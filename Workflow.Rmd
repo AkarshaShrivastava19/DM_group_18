@@ -1,0 +1,386 @@
+---
+title: "Data Management Assignment Group 18 "
+author: "Group18"
+date: "2024-03-20"
+output:
+  pdf_document:
+    toc: yes
+    number_sections: yes
+  word_document:
+    toc: yes
+editor_options: 
+  chunk_output_type: console
+---
+
+\newpage
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,comment = NA)
+library(readr)
+library(readr)
+library(RSQLite)
+library(dplyr)
+```
+
+# Creating database connection
+
+```{r loadsqlite, warning=FALSE,error=FALSE,message=FALSE,attr.source='.numberLines'}
+# Create a connection
+connection <- RSQLite::dbConnect(RSQLite::SQLite(),"ecomdata.db")
+RSQLite::dbListTables(connection)
+connection <- dbConnect(SQLite(),"ecomdata.db")
+```
+
+# Creating table Schema for all tables
+
+## Creating Customer Table
+```{sql, eval=FALSE, connection = connection}
+
+CREATE TABLE IF NOT EXISTS customer ( 
+
+    customer_id VARCHAR(10) PRIMARY KEY, 
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL, 
+    email VARCHAR(50) NOT NULL, 
+    gender VARCHAR(20) NOT NULL,
+    age INT NOT NULL,
+    career VARCHAR(50) NOT NULL,
+    customer_phone VARCHAR(20) NOT NULL, 
+    address_country VARCHAR(50) NOT NULL,
+    address_zipcode VARCHAR(20) NOT NULL,
+    address_city VARCHAR(20) NOT NULL,
+    address_street VARCHAR(50) NOT NULL,
+    referred_by VARCHAR(10) NULL
+    
+);
+```
+
+
+## Creating Supplier Table
+```{sql, eval=FALSE, connection = connection}
+CREATE TABLE IF NOT EXISTS supplier ( 
+
+    supplier_id VARCHAR(10) PRIMARY KEY, 
+    supplier_name VARCHAR(50) NOT NULL
+    );
+```
+
+
+## Creating Category Table
+```{sql, eval=FALSE, connection = connection}
+CREATE TABLE IF NOT EXISTS category ( 
+
+    category_id VARCHAR(10) PRIMARY KEY, 
+    category_name VARCHAR(50) NOT NULL
+
+);
+
+```
+
+## Creating Promotion Table
+```{sql, eval=FALSE, connection = connection}
+CREATE TABLE IF NOT EXISTS promotion ( 
+
+    promotion_id VARCHAR(10) PRIMARY KEY, 
+    promotion_name VARCHAR(20) NOT NULL,
+    promotion_start_date DATE NOT NULL,
+    promotion_end_date DATE NOT NULL,
+    promotion_discount_value FLOAT NOT NULL
+
+);
+
+```
+
+## Creating Product Table
+```{sql, eval=FALSE, connection = connection}
+CREATE TABLE IF NOT EXISTS product ( 
+
+    product_id VARCHAR(10) PRIMARY KEY, 
+    category_id VARCHAR(10) NOT NULL,
+    supplier_id VARCHAR(10) NOT NULL, 
+    promotion_id VARCHAR(10) NULL, 
+    product_name VARCHAR(20) NOT NULL,
+    price INT NOT NULL,
+    quantity_stock INT NOT NULL,
+    quantity_supplied INT NOT NULL, 
+    review_score FLOAT NOT NULL,
+    FOREIGN KEY ('category_id') REFERENCES category('category_id'), 
+    FOREIGN KEY ('supplier_id') REFERENCES supplier('supplier_id'), 
+    FOREIGN KEY ('promotion_id') REFERENCES promotion('promotion_id')     
+   
+);
+
+```
+
+## Creating Shipment Table
+```{sql, eval=FALSE, connection = connection}
+
+CREATE TABLE IF NOT EXISTS shipment ( 
+
+    shipment_id VARCHAR(10) PRIMARY KEY, 
+    shipment_status VARCHAR(20) NOT NULL
+);
+    
+```
+
+## Creating Orders Table
+```{sql, eval=FALSE, connection = connection}
+
+CREATE TABLE IF NOT EXISTS orders ( 
+
+    order_id VARCHAR(20) NOT NULL, 
+    product_id VARCHAR(10) NOT NULL,
+    customer_id VARCHAR(10) NOT NULL,
+    shipment_id VARCHAR(10) NOT NULL,
+    order_status VARCHAR(20) NOT NULL,
+    refund_status VARCHAR(20) NOT NULL,
+    quantity INT NOT NULL,
+    refund_status BOOLEAN NOT NULL, 
+    FOREIGN KEY ('customer_id') REFERENCES customer('customer_id'), 
+    FOREIGN KEY ('product_id') REFERENCES product('product_id'),
+    FOREIGN KEY ('shipment_id') REFERENCES shipment('shipment_id')
+    PRIMARY KEY (order_id,product_id,customer_id,shipment_id)
+
+
+)
+
+```
+
+# Listing tables from the database that we created
+
+```{r listtables}
+
+RSQLite::dbListTables(connection)
+
+```
+
+
+#Storing data in RDS format
+```{r rdata,message=FALSE,warning=FALSE,attr.source='.numberLines'}
+all_files <- list.files("data_upload/")
+for (variable in all_files) {
+  filepath <- paste0("data_upload/",variable)
+  file_contents <- readr::read_csv(filepath)
+  table_name <- gsub(".csv","",variable)
+  save(file_contents,file = paste0("rdadata/",table_name,".rds"))
+}
+
+```
+# List of CSV Files
+```{r readr,attr.source='.numberLines'}
+all_files <- list.files("data_upload/")
+all_files
+
+```
+
+# Creating a loop to read on all files
+## Number of rows and columns in each file
+```{r loop,message=FALSE,warning=FALSE,attr.source='.numberLines'}
+
+for (variable in all_files) {
+  filepath <- paste0("data_upload/",variable)
+  file_contents <- readr::read_csv(filepath)
+  
+  number_of_rows <- nrow(file_contents)
+  number_of_columns <- ncol(file_contents)
+
+#Printing the number of rows and columns in each file  
+  print(paste0("The file: ",variable,
+              " has: ",
+              format(number_of_rows,big.mark = ","),
+              " rows and ",
+              number_of_columns," columns"))
+
+  number_of_rows <- nrow(file_contents)
+  
+  print(paste0("Checking for file: ",variable))
+
+  
+#Printing True if the first column is the primary key column else printing False  
+  print(paste0(" is ",nrow(unique(file_contents[,1]))==number_of_rows))
+}
+
+```
+
+## Structure of data
+```{r, warning=FALSE}
+
+for (variable in all_files) {
+  filepath <- paste0("data_upload/",variable)
+  file_contents <- readr::read_csv(filepath)
+  str_data <-str(file_contents)
+  print(paste0(str_data,"Sructure of the file ", variable))
+}
+
+```
+
+## Number of columns and their column names
+```{r colnames, warning=FALSE}
+
+for (variable in all_files) {
+  filepath <- paste0("data_upload/",variable)
+  file_contents <- readr::read_csv(filepath)
+  column_names <-colnames(file_contents)
+  print(paste0("File ", variable, " has column as ",column_names))
+}
+
+```
+
+## Checking unique id column as the primary key in each table
+```{r getindividualvalues, warning=FALSE}
+
+for (variable in all_files) {
+  filepath <- paste0("data_upload/", variable)
+  file_contents <- readr::read_csv(filepath)
+  primary_key <- nrow(unique(file_contents[,1])) == nrow(file_contents)
+  print(paste0("Primary key of ", variable, " is ", primary_key))
+}
+
+
+```
+
+
+
+# Data Validation
+## Validations for customer data file
+```{r}
+
+# Establishing Connection 
+connection <- RSQLite::dbConnect(RSQLite::SQLite(), "ecomdata.db")
+
+fetch_existing_customer_ids <- function(connection) {
+  query <- "SELECT DISTINCT customer_id FROM customer"
+  existing_ids <- dbGetQuery(connection, query)$customer_id
+  return(existing_ids)
+  
+}
+
+   # Customer data validation and Reffered by referencial integrity
+   validate_and_prepare_data <- function(data, existing_ids) {
+     
+   #Validation for customer ID  
+   customer_id_check <- grepl("^CUST[0-9]{6}$", data$customer_id)
+   data <- data[customer_id_check, ]
+
+   #Validation for email
+   email_check <- grepl("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", data$email)
+   data<- data[email_check, ]
+
+   #Validation for gender
+   gender_check <- c("male","female","Female","Male")
+   data<- data[data$gender %in% gender_check, ]
+
+   #Validation for age
+   age_check <- 1:100
+   data <- data[data$age %in% age_check, ]
+
+   #Validation for phone number
+   phone_check <- grepl("^\\+44 \\d{10}$", data$customer_phone)
+   data <- data[phone_check, ]
+
+   #Validation for zip code
+   zipcode_check <- grepl("^\\w{3} \\w{3}$", data$address_zipcode)
+   data <- data[zipcode_check, ]
+
+   # Reffered by check
+    unique_customer_ids <- unique(c(data$customer_id, existing_ids))
+
+   # Validate 'referred by' IDs
+    valid_referral_flags <- (data$referred_by == "") | data$referred_by %in% unique_customer_ids
+    data <- data[valid_referral_flags, ]
+
+    return(data)
+}
+
+    # Fetch existing customer IDs from the database
+    existing_customer_ids <- fetch_existing_customer_ids(connection)
+    
+    customer_file_paths <- list.files(path = "data_upload", pattern = "customer.*\\.csv$", full.names = TRUE)
+    customer_possible_data <- data.frame()  # Initialize empty dataframe
+    
+    customer_primary_key <- "customer_id"
+
+    # Read each customer CSV file and check for the existence of the primary key in the database before appending
+    for (file_path in customer_file_paths) {
+      cat("Starting processing file:", file_path, "\n")
+      # Read the current file
+      customer_data <- read.csv(file_path)
+      
+      # Iterate through each row of the file
+      for (i in seq_len(nrow(customer_data))) {
+        new_record <- customer_data[i, ]
+        primary_key_value <- new_record[[customer_primary_key]]
+        conditions <- paste(customer_primary_key, "=", paste0("'", primary_key_value, "'"))
+        
+        # Check if a record with the same primary key exists in the database
+        record_exists_query <- paste("SELECT COUNT(*) FROM customer WHERE", conditions)
+        record_exists_result <- dbGetQuery(connection, record_exists_query)
+        record_exists <- record_exists_result[1, 1] > 0
+        
+         if(record_exists) {
+          cat("Record with primary key", primary_key_value, "already exists in the database.\n")
+           }  
+         if (!record_exists) {
+             # Check if the primary key value of the new record is unique in the temporary dataframe
+            if (!primary_key_value %in% customer_possible_data[[customer_primary_key]]) {
+              customer_possible_data <- rbind(customer_possible_data, new_record)
+            }
+         }
+        
+      cat("Finished processing file:", file_path, "\n")
+        
+        }
+      cat("Starting validation for new records.\n")
+      customer_possible_data <- validate_and_prepare_data(customer_possible_data, existing_customer_ids)
+      cat("Validation completed for new records.\n")
+    }
+    
+    if (nrow(customer_possible_data) > 0) 
+      {
+        cat("Starting to insert validated data into the database. Number of records: ", nrow(customer_possible_data), "\n")
+            # Digesting prepared data to our database
+            dbWriteTable(connection, name = "customer", value = customer_possible_data, append = TRUE, row.names = FALSE)
+        cat("Data insertion completed successfully.\n")
+        } else 
+          {
+            cat("No valid customer data to insert into the database.\n")
+              }
+
+```
+
+# Disconnecting from Database
+```{r disconnect}
+RSQLite::dbDisconnect(connection)
+
+```
+
+
+# Droping tables
+```{sql, eval=FALSE, connection = connection}
+DROP TABLE customer;
+```
+
+```{sql, eval=FALSE, connection = connection}
+DROP TABLE category;
+```
+
+```{sql, eval=FALSE, connection = connection}
+DROP TABLE orders;
+```
+
+```{sql, eval=FALSE, connection = connection}
+DROP TABLE shipment;
+```
+
+```{sql, eval=FALSE, connection = connection}
+DROP TABLE product;
+```
+
+```{sql, eval=FALSE, connection = connection}
+DROP TABLE promotion;
+```
+
+```{sql, eval=FALSE, connection = connection}
+DROP TABLE supplier;
+```
