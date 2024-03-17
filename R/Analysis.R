@@ -121,9 +121,8 @@ g_customer <- ggplot(customer_city_count,
   geom_col(fill = "dodgerblue") +
   geom_text(aes(label = number_of_customers), 
             position = position_dodge(width = 0.9), vjust = -0.2, 
-            size = 3.5, family = "Times") +
-  theme(text = element_text(family = "Times"), 
-        axis.text.x = element_text(angle = 90, hjust = 0.5, vjust = 0), 
+            size = 3.5) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 0.5, vjust = 0), 
         axis.title = element_text(size = 12)) +
   labs(title = "Number of Customers in each City",
        x = "City",
@@ -175,9 +174,8 @@ height <- 8
 # Use ggplot to create a bar chart showing the number of products for each supplier
 g_supplier <- ggplot(product_count_by_supplier, aes(x = reorder(supplier_name, -number_of_products), y = number_of_products)) +
   geom_col(fill = "steelblue") + 
-  geom_text(aes(label = number_of_products), position = position_dodge(width = 0.9), vjust = -0.2, size = 3.5, family = "Times") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, family = "Times")) + 
-  theme(text = element_text(family = "Times")) +
+  geom_text(aes(label = number_of_products), position = position_dodge(width = 0.9), vjust = -0.2, size = 3.5) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
   labs(title = "Number of Products by Supplier (Descending Order)",
        x = "Supplier Name",
        y = "Number of Products")
@@ -232,10 +230,9 @@ height <- 8
 # Use ggplot to create a bar chart showing the total quantity sold for each product
 g_topproduct <- ggplot(top_product_sales_volume, aes(x = reorder(product_name, total_quantity_sold), y = total_quantity_sold)) +
   geom_col(fill = "steelblue") +
-  geom_text(aes(label = total_quantity_sold), position = position_dodge(width = 0.9), hjust = -0.2, size = 3.5, family = "Times") +
+  geom_text(aes(label = total_quantity_sold), position = position_dodge(width = 0.9), hjust = -0.2, size = 3.5) +
   coord_flip() +
-  theme(text = element_text(family = "Times"), 
-        axis.text.x = element_text(angle = 90, hjust = 1),
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
         axis.title = element_text(size = 12)) +
   labs(title = "Top 10 Bestselling Products",
        x = "Product Name",
@@ -292,7 +289,7 @@ g_promotionvalue <- ggplot(average_discounts, aes(x = month, y = average_discoun
   geom_line() +
   geom_point() +
   scale_x_continuous(breaks = 1:12, labels = month.abb) +
-  geom_text(aes(label = sprintf("%.2f", average_discount)), position = position_dodge(width = 0.9), vjust = -0.2, size = 3.5, family = "Times", color = "black") +
+  geom_text(aes(label = sprintf("%.2f", average_discount)), position = position_dodge(width = 0.9), vjust = -0.2, size = 3.5, color = "black") +
   labs(title = "Average Discount Value by Month and Year",
        x = "Month",
        y = "Average Discount",
@@ -314,9 +311,8 @@ promotion_counts <- data_expanded %>%
 g_promotioncount <- ggplot(promotion_counts, aes(x = month, y = n, fill = as.factor(year))) +
   geom_bar(stat = "identity", position = "dodge") +
   scale_x_continuous(breaks = 1:12, labels = month.abb) + 
-  geom_text(aes(label = n), position = position_dodge(width = 0.9), vjust = -0.2, size = 3.5, family = "Times") +
-  theme(text = element_text(family = "Times"), 
-        axis.title = element_text(size = 12, family = "Times")) +
+  geom_text(aes(label = n), position = position_dodge(width = 0.9), vjust = -0.2, size = 3.5) +
+  theme(axis.title = element_text(size = 12)) +
   labs(title = "Number of Promotions by Month and Year",
        x = "Month",
        y = "Number of Promotions",
@@ -367,9 +363,8 @@ g_monthlyrevenue <- ggplot(monthly_revenue, aes(x = month, y = total_revenue)) +
   geom_line(color = "steelblue") +
   geom_point() +
   scale_x_date(date_labels = "%b %Y", date_breaks = "1 month") +  
-  geom_text(aes(label = sprintf("%.2f", total_revenue)), position = position_dodge(width = 0.9), vjust = -0.5, size = 3.5, family = "Times") +
-  theme(text = element_text(family = "Times"), 
-        axis.text.x = element_text(angle = 45, hjust = 1, family = "Times")) + 
+  geom_text(aes(label = sprintf("%.2f", total_revenue)), position = position_dodge(width = 0.9), vjust = -0.5, size = 3.5) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
   labs(title = "Monthly Revenue", x = "Month", y = "Revenue")
 print(g_monthlyrevenue)
 
@@ -380,4 +375,146 @@ filename <- paste0("monthly_revenue_",
 # Save the plot with the dynamic filename
 ggsave(filename, plot = g_monthlyrevenue, width = width, height = height)
 
-RSQLite::dbDisconnect(connection)
+## Monthly Best-Selling Products
+# Calculate total monthly revenue per product
+monthly_product_revenue <- order_products_promotions %>%
+  mutate(month = floor_date(order_date, "month")) %>%
+  group_by(month, product_id) %>%
+  summarize(total_revenue_product = sum(revenue, na.rm = TRUE))
+
+# Select top earning products per month
+best_selling_products_each_month <- monthly_product_revenue %>%
+  group_by(month) %>%
+  slice_max(total_revenue_product, n = 1) %>%
+  ungroup() %>%
+  select(month, product_id, total_revenue_product)
+
+best_selling_products_each_month <- merge(best_selling_products_each_month, product[, c("product_id", "product_name")], by = "product_id")
+
+# Visualise the top earning products and their revenues per month
+g_bestseller_product_monthly <- ggplot(best_selling_products_each_month, aes(x = month, y = total_revenue_product, fill = product_name)) +
+  geom_col(show.legend = FALSE) +  
+  geom_text(aes(label = sprintf("%.2f", total_revenue_product)), position = position_dodge(width = 0.9), vjust = -0.5, size = 3.5) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_x_date(date_labels = "%b %Y", date_breaks = "1 month") +  
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Best-Selling Products by Month", x = "Month", y = "Total Revenue")  
+
+print(g_bestseller_product_monthly)
+
+# Dynamically generate filename with current date and time
+filename <- paste0("monthly_bestseller_product_", 
+                   format(Sys.time(), "%Y%m%d_%H%M%S"), ".png")
+
+# Save the plot with the dynamic filename
+ggsave(filename, plot = g_bestseller_product_monthly, width = width, height = height)
+
+# Create a table to visualize
+best_selling_products_each_month$month <- as.Date(best_selling_products_each_month$month, "%Y-%m-%d")
+
+best_selling_products_each_month$YearMonth <- format(best_selling_products_each_month$month, "%Y-%m")
+
+best_selling_products_each_month <- best_selling_products_each_month %>%
+  arrange(YearMonth)
+
+table_to_display <- best_selling_products_each_month %>%
+  select(YearMonth, product_name, total_revenue_product) %>%
+  rename('Total Revenue' = total_revenue_product)
+
+# Display the table with kable
+kable(table_to_display, caption = "Monthly Best-Selling Products", col.names = c("Time", "Product Name", "Total Revenue"))
+
+## Monthly Shipping Efficiency
+# Convert dates to Date objects
+orders$order_date <- as.Date(orders$order_date)
+shipment$shipment_date <- as.Date(shipment$shipment_date)
+
+shipment_unique <- shipment %>% distinct(shipment_id, .keep_all = TRUE)
+
+# Merge orders and shipment data on order_id
+combined_data <- merge(orders, shipment, by = "shipment_id")
+
+# Calculate shipping duration in days
+combined_data$shipping_duration <- as.numeric(difftime(combined_data$shipment_date, combined_data$order_date, units = "days"))
+
+# Calculate monthly statistics
+monthly_stats <- combined_data %>%
+  mutate(month = floor_date(order_date, "month")) %>%
+  group_by(month) %>%
+  summarise(Average_Shipping_Duration = round(mean(shipping_duration),2),
+            Min_Shipping_Duration = min(shipping_duration),
+            Max_Shipping_Duration = max(shipping_duration))
+
+table_to_display <- monthly_stats %>%
+  mutate(Time = format(month, "%Y-%m")) %>% 
+  select(Time, Average_Shipping_Duration, Min_Shipping_Duration, Max_Shipping_Duration)
+
+# Display the table with kable
+kable(table_to_display, caption = "Monthly Shipping Duration", col.names = c("Time", "Average Duration", "Min Duration", "Max Duration"))
+
+# Visualize the statistics
+ggplot(monthly_stats, aes(x = month)) +
+  geom_line(aes(y = Average_Shipping_Duration), color = "steelblue", size = 1) +
+  geom_text(aes(y = Average_Shipping_Duration, 
+                label = sprintf("%.2f", Average_Shipping_Duration)), 
+            position = position_dodge(width = 0.9), vjust = -0.5, size = 3.5) +
+  scale_x_date(date_labels = "%b %Y", 
+               date_breaks = "1 month",
+               limits = c(min(monthly_stats$month), max(monthly_stats$month))) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Monthly Shipping Duration",
+       x = "Month", y = "Shipping Duration (days)")
+
+# Dynamically generate filename with current date and time
+filename <- paste0("monthly_shiping_efficiency_", 
+                   format(Sys.time(), "%Y%m%d_%H%M%S"), ".png")
+
+# Save the plot with the dynamic filename
+ggsave(filename, plot = g_shiping_efficiency, width = width, height = height)
+
+## Monthly Delivery Efficiency
+# Convert dates to Date objects
+shipment$delivery_date <- as.Date(shipment$delivery_date)
+
+shipment_unique <- shipment %>% distinct(shipment_id, .keep_all = TRUE)
+
+# Merge orders and shipment data on order_id
+combined_data <- merge(orders, shipment, by = "shipment_id")
+
+# Calculate delivery duration in days
+combined_data$delivery_duration <- as.numeric(difftime(combined_data$delivery_date, combined_data$shipment_date, units = "days"))
+
+# Calculate monthly statistics
+monthly_stats <- combined_data %>%
+  mutate(month = floor_date(order_date, "month")) %>%
+  group_by(month) %>%
+  summarise(Average_Delivery_Duration = round(mean(delivery_duration),2),
+            Min_Delivery_Duration = min(delivery_duration),
+            Max_Delivery_Duration = max(delivery_duration))
+
+table_to_display <- monthly_stats %>%
+  mutate(Time = format(month, "%Y-%m")) %>% 
+  select(Time, Average_Delivery_Duration, Min_Delivery_Duration, Max_Delivery_Duration)
+
+# Display the table with kable
+kable(table_to_display, caption = "Monthly Delivery Duration", col.names = c("Time", "Average Duration", "Min Duration", "Max Duration"))
+
+# Visualize the statistics
+g_delivery_efficiency <- ggplot(monthly_stats, aes(x = month)) +
+  geom_line(aes(y = Average_Delivery_Duration), color = "steelblue", size = 1) +
+  geom_text(aes(y = Average_Delivery_Duration, 
+                label = sprintf("%.2f", Average_Delivery_Duration)), 
+            position = position_dodge(width = 0.9), vjust = -0.5, size = 3.5) +
+  scale_x_date(date_labels = "%b %Y", 
+               date_breaks = "1 month",
+               limits = c(min(monthly_stats$month), max(monthly_stats$month))) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Monthly Delivery Duration",
+       x = "Month", y = "Delivery Duration (days)")
+
+# Dynamically generate filename with current date and time
+filename <- paste0("monthly_delivery_efficiency_", 
+                   format(Sys.time(), "%Y%m%d_%H%M%S"), ".png")
+
+# Save the plot with the dynamic filename
+ggsave(filename, plot = g_shiping_efficiency, width = width, height = height)
