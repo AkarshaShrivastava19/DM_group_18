@@ -29,6 +29,9 @@ jobs:
       - name: Execute R script
         run: |
           Rscript R/update_table_validation.R
+      - name: Execute R script for automation analysis
+        run: |
+          Rscript R/Analysis.R
       - name: Add files
         run: |
           git config --global user.email "akarsha.shrivastava@warwick.ac.uk"
