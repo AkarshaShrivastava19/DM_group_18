@@ -454,7 +454,7 @@ table_to_display <- monthly_stats %>%
 kable(table_to_display, caption = "Monthly Shipping Duration", col.names = c("Time", "Average Duration", "Min Duration", "Max Duration"))
 
 # Visualize the statistics
-ggplot(monthly_stats, aes(x = month)) +
+g_shiping_efficiency <- ggplot(monthly_stats, aes(x = month)) +
   geom_line(aes(y = Average_Shipping_Duration), color = "steelblue", size = 1) +
   geom_text(aes(y = Average_Shipping_Duration, 
                 label = sprintf("%.2f", Average_Shipping_Duration)), 
@@ -518,4 +518,4 @@ filename <- paste0("monthly_delivery_efficiency_",
                    format(Sys.time(), "%Y%m%d_%H%M%S"), ".png")
 
 # Save the plot with the dynamic filename
-ggsave(filename, plot = g_shiping_efficiency, width = width, height = height)
+ggsave(filename, plot = g_delivery_efficiency, width = width, height = height)

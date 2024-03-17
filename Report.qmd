@@ -47,7 +47,7 @@ orders <- dbGetQuery(connection, "SELECT * FROM orders")
 
 ## Customer Profile
 
-### The distribution of customer's gender
+### The Distribution of Customer's Gender
 
 ```{sql, eval=TRUE, connection = connection}
 SELECT 
@@ -552,7 +552,7 @@ table_to_display <- monthly_stats %>%
 kable(table_to_display, caption = "Monthly Delivery Duration", col.names = c("Time", "Average Duration", "Min Duration", "Max Duration"))
 
 # Visualize the statistics
-ggplot(monthly_stats, aes(x = month)) +
+g_delivery_efficiency <- ggplot(monthly_stats, aes(x = month)) +
   geom_line(aes(y = Average_Delivery_Duration), color = "steelblue", size = 1) +
   geom_text(aes(y = Average_Delivery_Duration, 
                 label = sprintf("%.2f", Average_Delivery_Duration)), 
@@ -563,4 +563,11 @@ ggplot(monthly_stats, aes(x = month)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(title = "Monthly Delivery Duration",
        x = "Month", y = "Delivery Duration (days)")
+
+# Dynamically generate filename with current date and time
+filename <- paste0("monthly_delivery_efficiency_", 
+                   format(Sys.time(), "%Y%m%d_%H%M%S"), ".png")
+
+# Save the plot with the dynamic filename
+ggsave(filename, plot = g_delivery_efficiency, width = width, height = height)
 ```
