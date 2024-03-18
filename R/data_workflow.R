@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS customer (
     email VARCHAR(50) NOT NULL, 
     gender VARCHAR(20) NOT NULL,
     age INT NOT NULL,
-    career VARCHAR(50) NULL,
+    career VARCHAR(50) NOT NULL,
     customer_phone VARCHAR(20) NOT NULL, 
     address_country VARCHAR(50) NOT NULL,
     address_zipcode VARCHAR(20) NOT NULL,
@@ -84,9 +84,8 @@ RSQLite::dbExecute(connection,"
 
 CREATE TABLE IF NOT EXISTS shipment ( 
 
-    shipment_id VARCHAR(10) PRIMARY KEY,
-    shipment_date DATE NOT NULL,
-    delivery_date DATE NOT NULL
+    shipment_id VARCHAR(10) PRIMARY KEY, 
+    shipment_status VARCHAR(20) NOT NULL
 );
 
 ")
@@ -104,7 +103,7 @@ CREATE TABLE IF NOT EXISTS product (
     supplier_id VARCHAR(10) NOT NULL, 
     promotion_id VARCHAR(10) NULL, 
     product_name VARCHAR(20) NOT NULL,
-    price FLOAT NOT NULL,
+    price INT NOT NULL,
     quantity_stock INT NOT NULL,
     quantity_supplied INT NOT NULL, 
     review_score FLOAT NOT NULL,
@@ -123,8 +122,8 @@ RSQLite::dbExecute(connection,"
 CREATE TABLE IF NOT EXISTS orders ( 
 
     order_id VARCHAR(20) NOT NULL, 
-    customer_id VARCHAR(10) NOT NULL,
     product_id VARCHAR(10) NOT NULL,
+    customer_id VARCHAR(10) NOT NULL,
     shipment_id VARCHAR(10) NOT NULL,
     quantity INT NOT NULL,
     refund_status VARCHAR(20) NOT NULL,
@@ -543,7 +542,7 @@ validate_and_prepare_promotion_data <- function(data) {
   
   #Check for the validation of the promotion_start_date and promotion_end_date in the promotion   table.
   #promotion_start_date and promotion_end_data should be in correct form for eg 12/11/2023
-  date_format <- "%d-%m-%Y"
+  date_format <- "%Y-%m-%d"
   date_check <- !is.na(as.Date(data$promotion_start_date, format = date_format)) &
     !is.na(as.Date(data$promotion_end_date, format = date_format)) &
     as.Date(data$promotion_start_date, format = date_format) < as.Date(data$promotion_end_date, format = date_format)
@@ -701,78 +700,91 @@ if (nrow(promotion_possible_data) > 0)
 
 
 #Validations for product data
-
-    validate_and_prepare_product_data <- function(data) {
+    
+    validate_and_prepare_product_data <- function(data, connection) {
+      
       # Validation for product ID
       product_id_check <- grepl("^[A-Za-z0-9]{10}$", data$product_id)
       data <- data[product_id_check, ]
-      # Performing validation checks here
+      # Performing validation for review score 
       data <- data[data$review_score >= 1 & data$review_score <= 5, ]
+      
+      # Fetch existing IDs from reference tables
+      valid_category_ids <- dbGetQuery(connection, "SELECT category_id FROM category")$category_id
+      valid_supplier_ids <- dbGetQuery(connection, "SELECT supplier_id FROM supplier")$supplier_id
+      valid_promotion_ids <- c(dbGetQuery(connection, "SELECT promotion_id FROM promotion")$promotion_id, NA)
+      
+      # Referential integrity checks
+      data <- data[data$category_id %in% valid_category_ids, ]
+      data <- data[data$supplier_id %in% valid_supplier_ids, ]
+      data <- data[is.na(data$promotion_id) | data$promotion_id %in% valid_promotion_ids, ]
+      
+      # Validation for non-negative and integer quantity_stock and quantity_supplied
+      data <- data[data$quantity_stock >= 0 & !is.na(data$quantity_stock) & (data$quantity_stock == floor(data$quantity_stock)), ]
+      data <- data[data$quantity_supplied >= 0 & !is.na(data$quantity_supplied) & (data$quantity_supplied == floor(data$quantity_supplied)), ]
+      
+      # Validation for positive price values
+      data <- data[data$price > 0 & !is.na(data$price), ]
+      
+      # Validation to ensure product_name is not empty
+      data <- data[data$product_name != "" & !is.na(data$product_name), ]
       
       return(data)
     }
     
     
-    # Fetch existing product IDs from the database
+    # Fetch existing product IDs from the database into a vector
+    existing_product_ids <- dbGetQuery(connection, "SELECT product_id FROM product")$product_id
     
     product_file_paths <- list.files(path = "data_upload", pattern = "product.*\\.csv$", full.names = TRUE)
     
     # Define the primary key column for the product table
-    product_primary_key <- "product_id"
+    # product_primary_key <- "product_id"
     
-    #Initialising empty data frame
+    # Initialising temporary empty data frame
     product_possible_data <- data.frame() 
     
     
     # Read each product CSV file and check for the existence of the primary key in the database before appending
     for (file_path in product_file_paths) {
-      
       cat("Starting processing file:", file_path, "\n")
-      
       # Read the current file
       product_data <- readr::read_csv(file_path)
       
       # Iterate through each row of the file
       for (i in seq_len(nrow(product_data))) {
         new_record <- product_data[i, ]
-        primary_key_value <- new_record[[product_primary_key]]
-        conditions <- paste(product_primary_key, "=", paste0("'", primary_key_value, "'"))
+        primary_key_value <- new_record[["product_id"]]
         
-        # Check if a record with the same primary key exists in the database
-        record_exists_query <- paste("SELECT COUNT(*) FROM product WHERE", conditions)
-        record_exists_result <- dbGetQuery(connection, record_exists_query)
-        record_exists <- record_exists_result[1, 1] > 0
-        
-        if(record_exists) {
-          cat("Record with primary key", primary_key_value, "already exists in the database.\n")
-        }  
-        if (!record_exists) {
-          # Check if the primary key value of the new record is unique in the temporary dataframe
-          if (!primary_key_value %in% product_possible_data[[product_primary_key]]) {
+        if (!primary_key_value %in% existing_product_ids) {
+          if (!primary_key_value %in% product_possible_data[["product_id"]]) {
             product_possible_data <- rbind(product_possible_data, new_record)
           }
+        } else {
+          cat("Record with primary key", primary_key_value, "already exists in the database.\n")
         }
-        
-        cat("Finished processing file:", file_path, "\n")
-        
       }
-    }
-        cat("Starting validation for new records.\n")
-        product_possible_data <- validate_and_prepare_product_data(product_possible_data)
-        cat("Validation completed for new records.\n")
+      
+      cat("Finished processing file:", file_path, "\n")
+    }    
     
-    if (nrow(product_possible_data) > 0) 
-    {
+    # Call for validation and integrity check function    
+    cat("Starting validation for new records.\n")
+    product_possible_data <- validate_and_prepare_product_data(product_possible_data, connection)
+    cat("Validation completed for new records.\n")
+    
+    # Ingesting into database commands    
+    if (nrow(product_possible_data) > 0) {
       cat("Starting to insert validated data into the database. Number of records: ", nrow(product_possible_data), "\n")
-      # Digesting prepared data to our database
+      # Ingesting prepared data to our database
       dbWriteTable(connection, name = "product", value = product_possible_data, append = TRUE, row.names = FALSE)
       cat("Data insertion completed successfully.\n")
-    } else 
-    {
+    } else {
       cat("No valid product data to insert into the database.\n")
     }
     
-
+    
+    
 #Validation for orders data
 
         validate_and_prepare_orders_data <- function(data){
@@ -790,7 +802,7 @@ if (nrow(promotion_possible_data) > 0)
           data <- data[shipment_id_check,]
           
           # Validation for order_date format
-          order_date_format_check <- !is.na(as.Date(data$order_date, format = "%d-%m-%Y"))
+          order_date_format_check <- !is.na(as.Date(data$order_date, format = "%d/%m/%Y"))
           data <- data[order_date_format_check,]
           
           
