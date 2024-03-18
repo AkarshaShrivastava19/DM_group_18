@@ -543,7 +543,7 @@ validate_and_prepare_promotion_data <- function(data) {
   
   #Check for the validation of the promotion_start_date and promotion_end_date in the promotion   table.
   #promotion_start_date and promotion_end_data should be in correct form for eg 12/11/2023
-  date_format <- "%Y-%m-%d"
+  date_format <- "%d-%m-%Y"
   date_check <- !is.na(as.Date(data$promotion_start_date, format = date_format)) &
     !is.na(as.Date(data$promotion_end_date, format = date_format)) &
     as.Date(data$promotion_start_date, format = date_format) < as.Date(data$promotion_end_date, format = date_format)
@@ -631,8 +631,8 @@ if (nrow(promotion_possible_data) > 0)
       data <- data[shipment_id_check,]
       
       # Validation for shipment_date and delivery_date format
-      date_format_check <- !is.na(as.Date(data$shipment_date, format = "%Y/%m/%d")) &
-        !is.na(as.Date(data$delivery_date, format = "%Y/%m/%d"))
+      date_format_check <- !is.na(as.Date(data$shipment_date, format = "%d-%m-%Y")) &
+        !is.na(as.Date(data$delivery_date, format = "%d-%m-%Y"))
       
       data <- data[date_format_check,]
       
@@ -790,7 +790,7 @@ if (nrow(promotion_possible_data) > 0)
           data <- data[shipment_id_check,]
           
           # Validation for order_date format
-          order_date_format_check <- !is.na(as.Date(data$order_date, format = "%Y/%m/%d"))
+          order_date_format_check <- !is.na(as.Date(data$order_date, format = "%d-%m-%Y"))
           data <- data[order_date_format_check,]
           
           
