@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS customer (
     email VARCHAR(50) NOT NULL, 
     gender VARCHAR(20) NOT NULL,
     age INT NOT NULL,
-    career VARCHAR(50) NOT NULL,
+    career VARCHAR(50) NULL,
     customer_phone VARCHAR(20) NOT NULL, 
     address_country VARCHAR(50) NOT NULL,
     address_zipcode VARCHAR(20) NOT NULL,
@@ -84,8 +84,9 @@ RSQLite::dbExecute(connection,"
 
 CREATE TABLE IF NOT EXISTS shipment ( 
 
-    shipment_id VARCHAR(10) PRIMARY KEY, 
-    shipment_status VARCHAR(20) NOT NULL
+    shipment_id VARCHAR(10) PRIMARY KEY,
+    shipment_date DATE NOT NULL,
+    delivery_date DATE NOT NULL
 );
 
 ")
@@ -103,7 +104,7 @@ CREATE TABLE IF NOT EXISTS product (
     supplier_id VARCHAR(10) NOT NULL, 
     promotion_id VARCHAR(10) NULL, 
     product_name VARCHAR(20) NOT NULL,
-    price INT NOT NULL,
+    price FLOAT NOT NULL,
     quantity_stock INT NOT NULL,
     quantity_supplied INT NOT NULL, 
     review_score FLOAT NOT NULL,
@@ -122,8 +123,8 @@ RSQLite::dbExecute(connection,"
 CREATE TABLE IF NOT EXISTS orders ( 
 
     order_id VARCHAR(20) NOT NULL, 
-    product_id VARCHAR(10) NOT NULL,
     customer_id VARCHAR(10) NOT NULL,
+    product_id VARCHAR(10) NOT NULL,
     shipment_id VARCHAR(10) NOT NULL,
     quantity INT NOT NULL,
     refund_status VARCHAR(20) NOT NULL,
@@ -630,8 +631,8 @@ if (nrow(promotion_possible_data) > 0)
       data <- data[shipment_id_check,]
       
       # Validation for shipment_date and delivery_date format
-      date_format_check <- !is.na(as.Date(data$shipment_date, format = "%d-%m-%Y")) &
-        !is.na(as.Date(data$delivery_date, format = "%d-%m-%Y"))
+      date_format_check <- !is.na(as.Date(data$shipment_date, format = "%Y/%m/%d")) &
+        !is.na(as.Date(data$delivery_date, format = "%Y/%m/%d"))
       
       data <- data[date_format_check,]
       
@@ -789,7 +790,7 @@ if (nrow(promotion_possible_data) > 0)
           data <- data[shipment_id_check,]
           
           # Validation for order_date format
-          order_date_format_check <- !is.na(as.Date(data$order_date, format = "%d/%m/%Y"))
+          order_date_format_check <- !is.na(as.Date(data$order_date, format = "%Y/%m/%d"))
           data <- data[order_date_format_check,]
           
           
