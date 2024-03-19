@@ -2,6 +2,7 @@ library(readr)
 library(DBI)
 library(RSQLite)
 library(dplyr)
+library(digest)
 
 
 # Creating database connection
@@ -558,7 +559,7 @@ if (nrow(promotion_possible_data) > 0)
 #Validations for shipment data
 
     validate_and_prepare_shipment_data <- function(data) {
-      # Validation for shipment ID
+      # # Validation for shipment ID
       shipment_id_check <- grepl("^SHIP[0-9]{6}$", data$shipment_id)
       data <- data[shipment_id_check,]
       
@@ -577,66 +578,112 @@ if (nrow(promotion_possible_data) > 0)
       
       # Keep only rows with logical date order
       data <- data[logical_date_order_check,]
-
+      
       return(data) 
     }
     
     # Fetch existing shipment IDs from the database
-    
+    existing_shipment_ids <- dbGetQuery(connection, "SELECT shipment_id FROM shipment")$shipment_id
+    # List all files that have shipment in the title
     shipment_file_paths <- list.files(path = "data_upload", pattern = "shipment.*\\.csv$", full.names = TRUE)
+    # Destination directory to move after processing the file
+    destination_dir <- "data_processed"
+    # Ensure the destination directory exists before processing files
+    if (!dir.exists(destination_dir)) {
+      dir.create(destination_dir)
+    }
     
-    # Define the primary key column for the shipment table
-    shipment_primary_key <- "shipment_id"
-    
-    #Initialising empty data frame
-    shipment_possible_data <- data.frame() 
-    
-    # Read each shipment CSV file and check for the existence of the primary key in the database before appending
-    for (file_path in shipment_file_paths) {
-      
-      cat("Starting processing file:", file_path, "\n")
-      
-      # Read the current file
-      shipment_data <- readr::read_csv(file_path)
-      
-      # Iterate through each row of the file
-      for (i in seq_len(nrow(shipment_data))) {
-        new_record <- shipment_data[i, ]
-        primary_key_value <- new_record[[shipment_primary_key]]
-        conditions <- paste(shipment_primary_key, "=", paste0("'", primary_key_value, "'"))
+    # Check if there are new files for shipment table   
+    if (length(shipment_file_paths) > 0) { 
+      #Initialising empty data frame
+      shipment_possible_data <- data.frame(shipment_id = character(), stringsAsFactors = FALSE)
+      # Read each shipment CSV file and check for the existence of the primary key in the database before appending
+      for (file_path in shipment_file_paths) {
+        cat("Starting processing file:", file_path, "\n")
         
-        # Check if a record with the same primary key exists in the database
-        record_exists_query <- paste("SELECT COUNT(*) FROM shipment WHERE", conditions)
-        record_exists_result <- dbGetQuery(connection, record_exists_query)
-        record_exists <- record_exists_result[1, 1] > 0
+        # Read the current file
+        shipment_data <- readr::read_csv(file_path, show_col_types = FALSE)
         
-        if(record_exists) {
-          cat("Record with primary key", primary_key_value, "already exists in the database.\n")
-        }  
-        if (!record_exists) {
-          # Check if the primary key value of the new record is unique in the temporary dataframe
-          if (!primary_key_value %in% shipment_possible_data[[shipment_primary_key]]) {
-            shipment_possible_data <- rbind(shipment_possible_data, new_record)
+        # Filter out records with existing shipment_id in the database
+        unique_shipment_data <- shipment_data[!shipment_data$shipment_id %in% existing_shipment_ids, ]
+        
+        # Combine unique records into the possible data frame
+        shipment_possible_data <- rbind(shipment_possible_data, unique_shipment_data)
+        
+        # Construct the destination file path
+        file_name <- basename(file_path)
+        dest_file_path <- file.path(destination_dir, file_name)
+        
+        # Construct the destination file path with a timestamp to ensure uniqueness
+        file_name <- basename(file_path)
+        timestamp <- format(Sys.time(), "%Y%m%d%H%M%S")  # Get current timestamp
+        file_ext <- tools::file_ext(file_name)  # Extract file extension
+        base_name <- sub(paste0("\\.", file_ext, "$"), "", file_name)  # Remove extension from filename
+        new_file_name <- paste0(base_name, "_", timestamp, ".", file_ext)  # Create new filename with timestamp
+        dest_file_path <- file.path(destination_dir, new_file_name)  # Construct new destination path
+        
+        # Move the processed file to the destination directory
+        if (file.rename(file_path, dest_file_path)) {
+          cat("Successfully moved processed file to:", dest_file_path, "\n")
+        } else {
+          cat("Failed to move file:", file_path, "\n")
+        }
+        cat("Finished processing file:", file_path, "\n")
+      }
+      
+      # Ensure shipment_possible_data contains only unique shipment_ids, no repetition of new data rows
+      shipment_possible_data <- shipment_possible_data %>% distinct(shipment_id, .keep_all = TRUE)
+      
+      
+      if (nrow(shipment_possible_data) > 0) {
+        cat("Starting validation for new records.\n")
+        shipment_possible_data <- validate_and_prepare_shipment_data(shipment_possible_data)
+        cat("Validation completed for new records.\n")
+      }
+      
+      # Order data to ensure consistent hashing
+      shipment_possible_data <- shipment_possible_data[order(shipment_possible_data$shipment_id), ]
+      
+      if (!is.null(dim(shipment_possible_data)) && dim(shipment_possible_data)[1] > 0) {
+        # Generate pre-load hashes
+        pre_load_hashes <- sapply(1:nrow(shipment_possible_data), function(i) {
+          record <- as.character(unlist(shipment_possible_data[i, ]))
+          digest(paste(record, collapse = "|"), algo = "md5")
+        })
+        cat("Starting to insert validated data into the database. Number of records: ", nrow(shipment_possible_data), "\n")
+        tryCatch({
+          dbWriteTable(connection, name = "shipment", value = shipment_possible_data, append = TRUE, row.names = FALSE)
+          cat("Data insertion completed successfully.\n")
+        }, error = function(e) {
+          cat("Error inserting data into the database: ", e$message, "\n")
+        })
+        # Fetch the loaded data back for post-load hash comparison
+        loaded_shipment_ids <- sprintf("'%s'", shipment_possible_data$shipment_id)
+        query <- sprintf("SELECT * FROM shipment WHERE shipment_id IN (%s) ORDER BY shipment_id", paste(loaded_shipment_ids, collapse 
+                                                                                                        = ", "))
+        retrieved_shipments <- dbGetQuery(connection, query)
+        
+        post_load_hashes <- sapply(1:nrow(retrieved_shipments), function(i) {
+          record <- as.character(unlist(retrieved_shipments[i, ]))
+          digest(paste(record, collapse = "|"), algo = "md5")
+        })
+        
+        if (nrow(retrieved_shipments) > 0) {
+          
+          # Compare hashes
+          identical_hashes <- all(pre_load_hashes == post_load_hashes)
+          if (identical_hashes) {
+            cat("Data integrity verified: All record hashes match.\n")
+          } else {
+            cat("Data integrity check failed: Record hashes do not match.\n")
           }
         }
-        
-        cat("Finished processing file:", file_path, "\n")
-        
+      } else {
+        cat("No valid shipment data to insert into the database.\n")
       }
-    }
-    cat("Starting validation for new records.\n")
-    shipment_possible_data <- validate_and_prepare_shipment_data(shipment_possible_data)
-    cat("Validation completed for new records.\n")
-    
-    if (nrow(shipment_possible_data) > 0) {
-      cat("Starting to insert validated data into the database. Number of records: ", nrow(shipment_possible_data), "\n")
-      
-      # Ingesting prepared data to our database
-      dbWriteTable(connection, name = "shipment", value = shipment_possible_data, append = TRUE, row.names = FALSE)
-      cat("Data insertion completed successfully.\n")
     } else {
-      cat("No valid shipment data to insert into the database.\n")
-    }
+      cat("No new files to process.\n")
+    }  
 
 
 #Validations for product data
