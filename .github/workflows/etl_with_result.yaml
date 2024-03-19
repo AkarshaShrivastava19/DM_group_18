@@ -38,6 +38,14 @@ jobs:
       - name: Execute R script for automation analysis
         run: |
           Rscript R/Analysis.R
+
+      - name: Commit and Push Analysis Results
+        run: |
+          git config --global user.email "akarsha.shrivastava@warwick.ac.uk"
+          git config --global user.name "AkarshaShrivastava19"
+          git add *delivery_efficiency_*.png *delivery_table_*.csv
+          git commit -m "Update analysis results"
+          git push
       
       - name: Add files
         run: |
