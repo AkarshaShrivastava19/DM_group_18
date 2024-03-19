@@ -625,8 +625,9 @@ if (nrow(promotion_possible_data) > 0)
 
 #Validations for shipment data
 
+    
     validate_and_prepare_shipment_data <- function(data) {
-      # Validation for shipment ID
+      # # Validation for shipment ID
       shipment_id_check <- grepl("^SHIP[0-9]{6}$", data$shipment_id)
       data <- data[shipment_id_check,]
       
@@ -643,48 +644,34 @@ if (nrow(promotion_possible_data) > 0)
     }
     
     # Fetch existing shipment IDs from the database
-    
+    existing_shipment_ids <- dbGetQuery(connection, "SELECT shipment_id FROM shipment")$shipment_id
+    # List all files that have shipment in the title
     shipment_file_paths <- list.files(path = "data_upload", pattern = "shipment.*\\.csv$", full.names = TRUE)
     
-    # Define the primary key column for the shipment table
-    shipment_primary_key <- "shipment_id"
     
     #Initialising empty data frame
     shipment_possible_data <- data.frame() 
     
     # Read each shipment CSV file and check for the existence of the primary key in the database before appending
     for (file_path in shipment_file_paths) {
-      
       cat("Starting processing file:", file_path, "\n")
       
       # Read the current file
       shipment_data <- readr::read_csv(file_path)
       
-      # Iterate through each row of the file
-      for (i in seq_len(nrow(shipment_data))) {
-        new_record <- shipment_data[i, ]
-        primary_key_value <- new_record[[shipment_primary_key]]
-        conditions <- paste(shipment_primary_key, "=", paste0("'", primary_key_value, "'"))
-        
-        # Check if a record with the same primary key exists in the database
-        record_exists_query <- paste("SELECT COUNT(*) FROM shipment WHERE", conditions)
-        record_exists_result <- dbGetQuery(connection, record_exists_query)
-        record_exists <- record_exists_result[1, 1] > 0
-        
-        if(record_exists) {
-          cat("Record with primary key", primary_key_value, "already exists in the database.\n")
-        }  
-        if (!record_exists) {
-          # Check if the primary key value of the new record is unique in the temporary dataframe
-          if (!primary_key_value %in% shipment_possible_data[[shipment_primary_key]]) {
-            shipment_possible_data <- rbind(shipment_possible_data, new_record)
-          }
-        }
-        
-        cat("Finished processing file:", file_path, "\n")
-        
-      }
+      # Filter out records with existing shipment_id in the database
+      unique_shipment_data <- shipment_data[!shipment_data$shipment_id %in% existing_shipment_ids, ]
+      
+      # Combine unique records into the possible data frame
+      shipment_possible_data <- rbind(shipment_possible_data, unique_shipment_data)
+      
+      
+      cat("Finished processing file:", file_path, "\n")
     }
+    
+    # Ensure shipment_possible_data contains only unique shipment_ids, no repetition of new data rows
+    shipment_possible_data <- shipment_possible_data %>% distinct(shipment_id, .keep_all = TRUE)
+    
     cat("Starting validation for new records.\n")
     shipment_possible_data <- validate_and_prepare_shipment_data(shipment_possible_data)
     cat("Validation completed for new records.\n")
@@ -697,6 +684,7 @@ if (nrow(promotion_possible_data) > 0)
     } else {
       cat("No valid shipment data to insert into the database.\n")
     }
+    
 
 
 
@@ -849,7 +837,7 @@ if (nrow(promotion_possible_data) > 0)
     }
     
     
-    # Validation of orders table
+    # Referential integrity of orders table
     # Function to check if given foreign IDs of orders data exist in their respective tables
     check_id_exists <- function(connection, table_name, column_name, ids) {
       query_template <- "SELECT DISTINCT %s FROM %s WHERE %s IN (%s)"
@@ -876,7 +864,7 @@ if (nrow(promotion_possible_data) > 0)
     
     
     
-    # Validation of orders table
+    # Validation function of orders table
     
     validate_and_prepare_orders_data <- function(data){
       # Checking format of order id  
