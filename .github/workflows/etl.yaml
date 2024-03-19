@@ -29,11 +29,11 @@ jobs:
       - name: Install packages
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
-          Rscript -e 'install.packages(c("ggplot2","dplyr","readr","RSQLite","DBI","lubridate","tidyr", "knitr"))'
+          Rscript -e 'install.packages(c("ggplot2","dplyr","readr","RSQLite","DBI","lubridate","tidyr", "knitr", "digest"))'
       
-      - name: Execute R script
+      - name: Execute R script for Initial table creation and validation
         run: |
-          Rscript R/update_table_validation.R
+          Rscript R/data_workflow.R
       
       - name: Execute R script for automation analysis
         run: |
