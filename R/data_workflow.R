@@ -716,7 +716,7 @@ if (nrow(promotion_possible_data) > 0)
       valid_supplier_ids <- dbGetQuery(connection, "SELECT supplier_id FROM supplier")$supplier_id
       valid_promotion_ids <- c(dbGetQuery(connection, "SELECT promotion_id FROM promotion")$promotion_id, NA)
       
-      # Referential integrity checks
+      # Referential integrity check
       data <- data[data$category_id %in% valid_category_ids, ]
       data <- data[data$supplier_id %in% valid_supplier_ids, ]
       data <- data[is.na(data$promotion_id) | data$promotion_id %in% valid_promotion_ids, ]
