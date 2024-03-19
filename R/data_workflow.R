@@ -824,82 +824,157 @@ if (nrow(promotion_possible_data) > 0)
     
 #Validation for orders data
 
-        validate_and_prepare_orders_data <- function(data){
-          # Checking format of order id  
-          order_id_check <- grepl("^ORDER[0-9]{9}$", data$order_id)
-          data <- data[order_id_check, ]
-          
-          customer_id_check <- grepl("^CUST[0-9]{6}$", data$customer_id)
-          data <- data[customer_id_check, ]
-          
-          product_id_check <- grepl("^[A-Za-z0-9]{10}$", data$product_id)
-          data <- data[product_id_check, ]
-          
-          shipment_id_check <- grepl("^SHIP[0-9]{6}$", data$shipment_id)
-          data <- data[shipment_id_check,]
-          
-          # Validation for order_date format
-          order_date_format_check <- !is.na(as.Date(data$order_date, format = "%d/%m/%Y"))
-          data <- data[order_date_format_check,]
-          
-          
-          return(data) 
-        }
+    # Function to check if given foreign IDs of orders data exist in their respective tables
+    check_id_exists <- function(connection, table_name, column_name, ids) {
+      query_template <- "SELECT DISTINCT %s FROM %s WHERE %s IN (%s)"
+      query <- sprintf(query_template, column_name, table_name, column_name, paste0("'", ids, "'", collapse = ", "))
+      existing_ids <- dbGetQuery(connection, query)[[1]]
+      all(ids %in% existing_ids)
+    }
+    
+    # Function to validate that foreign keys of 'orders' are existing in respective tables
+    validate_referential_integrity <- function(new_record) {
+      customer_exists <- check_id_exists(connection, "customer", "customer_id", new_record$customer_id)
+      product_exists <- check_id_exists(connection, "product", "product_id", new_record$product_id)
+      shipment_exists <- check_id_exists(connection, "shipment", "shipment_id", new_record$shipment_id)
+      
+      if(product_exists & customer_exists & shipment_exists) {
+        return(TRUE)
+      } else {
+        if(!customer_exists) cat("Customer ID does not exist:", new_record$customer_id, "\n")
+        if(!product_exists) cat("Product ID does not exist:", new_record$product_id, "\n")
+        if(!shipment_exists) cat("Shipment ID does not exist:", new_record$shipment_id, "\n")
+        return(FALSE)
+      }
+    }
+    
+    
+    # Validation of orders table
+    validate_and_prepare_orders_data <- function(data){
+      # Checking format of order id  
+      order_id_check <- grepl("^ORDER[0-9]{9}$", data$order_id)
+      data <- data[order_id_check, ]
+      
+      customer_id_check <- grepl("^CUST[0-9]{6}$", data$customer_id)
+      data <- data[customer_id_check, ]
+      
+      product_id_check <- grepl("^[A-Za-z0-9]{10}$", data$product_id)
+      data <- data[product_id_check, ]
+      
+      shipment_id_check <- grepl("^SHIP[0-9]{6}$", data$shipment_id)
+      data <- data[shipment_id_check,]
+      
+      # Convert order_date strings to Date objects
+      converted_dates <- as.Date(data$order_date, format = "%d/%m/%Y")
+      
+      # Efficient validation for order_date format and range
+      valid_dates <- !is.na(converted_dates) & converted_dates >= as.Date("2023-01-01")
+      
+      # Filter data based on the valid_dates check
+      data <- data[valid_dates, ]
+      
+      # Validation for order_date format
+      order_date_format_check <- !is.na(as.Date(data$order_date, format = "%d/%m/%Y"))
+      data <- data[order_date_format_check,]
+      
+      
+      return(data) 
+    }
+    
+    # List all files that have 'orders' in name
+    orders_file_paths <- list.files(path = "data_upload", pattern = "orders.*\\.csv$", full.names = TRUE)
+    # Create a temporary df for data to possibly upload 
+    orders_possible_data <- data.frame()  
+    
+    
+    # Read each orders CSV file and check for the existence of the composite primary key in the database before appending
+    for (file_path in orders_file_paths) {
+      orders_data <- readr::read_csv(file_path)
+      cat("Starting processing file:", file_path, "\n")   
+      # Iterate through each row of the file
+      for (i in seq_len(nrow(orders_data))) {
+        new_record <- orders_data[i, ]
         
-        
-        orders_file_paths <- list.files(path = "data_upload", pattern = "orders.*\\.csv$", full.names = TRUE)
-        orders_possible_data <- data.frame()  
-        
-        
-        # Read each orders CSV file and check for the existence of the composite primary key in the database before appending
-        for (file_path in orders_file_paths) {
-          orders_data <- readr::read_csv(file_path)
+        # Check for the Referential integrity 
+        if(validate_referential_integrity(new_record)) {
+          # Construct the condition to check the composite primary key (order_id, product_id, customer_id, shipment_id)
+          conditions <- sprintf("order_id = '%s' AND product_id = '%s' AND customer_id = '%s' AND shipment_id = '%s'", 
+                                new_record$order_id, new_record$product_id, new_record$customer_id, new_record$shipment_id)
           
-          # Iterate through each row of the file
-          for (i in seq_len(nrow(orders_data))) {
-            new_record <- orders_data[i, ]
-            # primary_key_value <- new_record[[orders_primary_key]]
-            # Construct the condition to check the composite primary key (order_id, product_id, customer_id, shipment_id)
-            conditions <- sprintf("order_id = '%s' AND product_id = '%s' AND customer_id = '%s' AND shipment_id = '%s'", 
-                                  new_record$order_id, new_record$product_id, new_record$customer_id, new_record$shipment_id)
+          # Check if a record with the same composite primary key exists in the database
+          record_exists_query <- paste("SELECT COUNT(*) FROM orders WHERE", conditions)
+          record_exists_result <- dbGetQuery(connection, record_exists_query)
+          record_exists <- record_exists_result[1, 1] > 0
+          
+          
+          if(!record_exists) {
+            # Construct a unique identifier for the composite primary key for potential new row
+            composite_key <- paste(new_record$order_id, new_record$product_id, new_record$customer_id, new_record$shipment_id, sep = "-")
             
-            # Check if a record with the same composite primary key exists in the database
-            record_exists_query <- paste("SELECT COUNT(*) FROM orders WHERE", conditions)
-            record_exists_result <- dbGetQuery(connection, record_exists_query)
-            record_exists <- record_exists_result[1, 1] > 0
+            # Function to check if the composite primary key is unique in the temporary dataframe
+            existing_keys <- sapply(1:nrow(orders_possible_data), function(i) {
+              paste(orders_possible_data[i, "order_id"], orders_possible_data[i, "product_id"], orders_possible_data[i, "customer_id"], 
+                    orders_possible_data[i, "shipment_id"], sep = "-")
+            })
             
-            
-            if(!record_exists) {
-              # Construct a unique identifier for the composite primary key
-              composite_key <- paste(new_record$order_id, new_record$product_id, new_record$customer_id, new_record$shipment_id, sep = "-")
-              
-              # Check if the composite primary key is unique in the temporary dataframe
-              existing_keys <- sapply(1:nrow(orders_possible_data), function(i) {
-                paste(orders_possible_data[i, "order_id"], orders_possible_data[i, "product_id"], orders_possible_data[i, "customer_id"], orders_possible_data[i, "shipment_id"], sep = "-")
-              })
-              
-              if (!composite_key %in% existing_keys) {
-                orders_possible_data <- rbind(orders_possible_data, new_record)
-              } else {
-                cat("Record with composite primary key already exists in temporary data.\n")
-              }
+            if (!composite_key %in% existing_keys) {
+              # If new potential row has unique primary key then move it to temprorary df
+              orders_possible_data <- rbind(orders_possible_data, new_record)
             } else {
-              cat("Record with composite primary key already exists in the database.\n")
+              cat("Record with composite primary key already exists in temporary data.\n")
             }
+          } else {
+            cat("Record with composite primary key already exists in the database.\n")
           }
-        }
-        orders_possible_data <- validate_and_prepare_orders_data(orders_possible_data)
-        
-        if (nrow(orders_possible_data) > 0) {
-          cat("Starting to insert validated data into the database. Number of records: ", nrow(orders_possible_data), "\n")
-          
-          # Ingesting prepared data to our database
-         
-           dbWriteTable(connection, name = "orders", value = orders_possible_data, append = TRUE, row.names = FALSE)
-          cat("Data insertion completed successfully.\n")
         } else {
-          cat("No valid orders data to insert into the database.\n")
-        }
+          cat("Referential integrity for the row is invalid.\n")
+        } 
+      }
+    }
+    cat("Starting validation for checked new records.\n")
+    orders_possible_data <- validate_and_prepare_orders_data(orders_possible_data)
+    cat("Validation completed for new records.\n")
+    
+    # Sorting the data to maintain ordering 
+    orders_possible_data <- orders_possible_data[order(orders_possible_data$order_id, orders_possible_data$product_id, orders_possible_data$customer_id, 
+                                                       orders_possible_data$shipment_id), ]
+    # Hashing the ready to upload data for data integrity check 
+    pre_load_hashes <- sapply(1:nrow(orders_possible_data), function(i) {
+      record <- as.character(unlist(orders_possible_data[i, ]))
+      digest(paste(record, collapse = "|"), algo = "md5")
+    })
+    
+    # Orders ingestion
+    if (nrow(orders_possible_data) > 0) {
+      cat("Starting to insert validated data into the database. Number of records: ", nrow(orders_possible_data), "\n")
+      # Attempt to ingest prepared data to our database
+      tryCatch({
+        dbWriteTable(connection, name = "orders", value = orders_possible_data, append = TRUE, row.names = FALSE)
+        cat("Data insertion completed successfully.\n")
+      }, error = function(e) {
+        cat("Error inserting data into the database: ", e$message, "\n")
+      })
+      # Fetch the loaded data back for post-load hash comparison
+      loaded_order_ids <- sprintf("'%s'", orders_possible_data$order_id)
+      query <- sprintf("SELECT * FROM orders WHERE order_id IN (%s) ORDER BY order_id, product_id, customer_id, shipment_id", paste(sprintf("'%s'", 
+                                                                                                                                            orders_possible_data$order_id), collapse = ", "))
+      retrieved_orders <- dbGetQuery(connection, query)
+      # Creating hashes for retrieved data from db    
+      post_load_hashes <- sapply(1:nrow(retrieved_orders), function(i) {
+        record <- as.character(unlist(retrieved_orders[i, ]))
+        digest(paste(record, collapse = "|"), algo = "md5")
+      })
+      
+      # Compare hashes for pre-loaded and retrieved-loaded data
+      identical_hashes <- all(pre_load_hashes == post_load_hashes)
+      if (identical_hashes) {
+        cat("Data integrity verified: All record hashes match.\n")
+      } else {
+        cat("Data integrity check failed: Record hashes do not match.\n")
+      }
+    } else {
+      cat("No valid orders data to insert into the database.\n")
+    }
 
 
 
