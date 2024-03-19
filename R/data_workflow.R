@@ -562,15 +562,22 @@ if (nrow(promotion_possible_data) > 0)
       shipment_id_check <- grepl("^SHIP[0-9]{6}$", data$shipment_id)
       data <- data[shipment_id_check,]
       
-      # Validation for shipment_date and delivery_date format
-      date_format_check <- !is.na(as.Date(data$shipment_date, format = "%d-%m-%Y")) &
-        !is.na(as.Date(data$delivery_date, format = "%d-%m-%Y"))
+      # Convert dates from character to Date object
+      data$shipment_date <- as.Date(data$shipment_date, format = "%d-%m-%Y")
+      data$delivery_date <- as.Date(data$delivery_date, format = "%d-%m-%Y")
       
+      # Validation for shipment_date and delivery_date format
+      date_format_check <- !is.na(data$shipment_date) & !is.na(data$delivery_date)
+      
+      # Keep only rows with valid date formats
       data <- data[date_format_check,]
       
-      #Validation for loogical order of shipment and delivery dates
-      logical_date_order_check <- as.Date(data$shipment_date) < as.Date(data$delivery_date)
+      # Validation for logical order of shipment and delivery dates
+      logical_date_order_check <- data$shipment_date <= data$delivery_date
+      
+      # Keep only rows with logical date order
       data <- data[logical_date_order_check,]
+
       return(data) 
     }
     
@@ -623,13 +630,13 @@ if (nrow(promotion_possible_data) > 0)
     
     if (nrow(shipment_possible_data) > 0) {
       cat("Starting to insert validated data into the database. Number of records: ", nrow(shipment_possible_data), "\n")
-      # Digesting prepared data to our database
+      
+      # Ingesting prepared data to our database
       dbWriteTable(connection, name = "shipment", value = shipment_possible_data, append = TRUE, row.names = FALSE)
       cat("Data insertion completed successfully.\n")
     } else {
       cat("No valid shipment data to insert into the database.\n")
     }
-
 
 
 #Validations for product data
@@ -704,6 +711,7 @@ if (nrow(promotion_possible_data) > 0)
       cat("No valid product data to insert into the database.\n")
     }
     
+        
 
 # Validation for orders data
 
@@ -712,12 +720,15 @@ if (nrow(promotion_possible_data) > 0)
           order_id_check <- grepl("^ORDER[0-9]{9}$", data$order_id)
           data <- data[order_id_check, ]
           
+          # Checking format of customer id
           customer_id_check <- grepl("^CUST[0-9]{6}$", data$customer_id)
           data <- data[customer_id_check, ]
           
+          # Checking format of product id
           product_id_check <- grepl("^[A-Za-z0-9]{10}$", data$product_id)
           data <- data[product_id_check, ]
           
+          # Checking format of shipment id
           shipment_id_check <- grepl("^SHIP[0-9]{6}$", data$shipment_id)
           data <- data[shipment_id_check,]
           
