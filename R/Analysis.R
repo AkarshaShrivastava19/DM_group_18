@@ -26,7 +26,7 @@ dbExecute(connection, "
 SELECT 
     gender, 
     COUNT(*) AS GenderCount,
-    ROUND((COUNT(*) * 100.0) / (SELECT COUNT(*) FROM customer), 2) AS Percentage
+    CONCAT(ROUND((COUNT(*) * 100.0) / (SELECT COUNT(*) FROM customer), 2), '%') AS Percentage
 FROM 
     customer
 GROUP BY 
@@ -38,9 +38,9 @@ ORDER BY
 ### The Distribution of Customer's Age
 dbExecute(connection, "
 SELECT 
-AgeGroup, 
-COUNT(*) AS Count,
-CONCAT(ROUND((COUNT(*) * 100.0) / (SELECT COUNT(*) FROM customer), 2), '%') AS Percentage
+    AgeGroup, 
+    COUNT(*) AS Count,
+    CONCAT(ROUND((COUNT(*) * 100.0) / (SELECT COUNT(*) FROM customer), 2), '%') AS Percentage
 FROM (
   SELECT 
   customer_id,
@@ -328,10 +328,10 @@ ggsave(filename, plot = g_promotioncount, width = width, height = height)
 
 ## Monthly Revenue Trend
 # Preprocessed date formats
-orders <- orders %>% mutate(order_date = as.Date(order_date))
+orders <- orders %>% mutate(order_date = dmy(order_date))
 promotion <- promotion %>%
-  mutate(start_date = as.Date(promotion_start_date),
-         end_date = as.Date(promotion_end_date),
+  mutate(start_date = promotion_start_date,
+         end_date = promotion_end_date,
          promotion_discount_value = if_else(is.na(promotion_discount_value), 0, promotion_discount_value))
 
 # Merge orders with products for pricing information
@@ -360,14 +360,13 @@ monthly_revenue <- order_products_promotions %>%
   summarize(total_revenue = sum(revenue, na.rm = TRUE))
 
 # Visualisation of monthly income
-g_monthlyrevenue <- ggplot(monthly_revenue, aes(x = month, y = total_revenue)) +
-  geom_line(color = "steelblue") +
-  geom_point() +
-  scale_x_date(date_labels = "%b %Y", date_breaks = "1 month") +  
-  geom_text(aes(label = sprintf("%.2f", total_revenue)), position = position_dodge(width = 0.9), vjust = -0.5, size = 3.5) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
-  labs(title = "Monthly Revenue", x = "Month", y = "Revenue")
-print(g_monthlyrevenue)
+(g_monthlyrevenue <- ggplot(monthly_revenue, aes(x = month, y = total_revenue)) +
+    geom_line(color = "steelblue") +
+    geom_point() +
+    scale_x_date(date_labels = "%b %Y", date_breaks = "1 month") +  
+    geom_text(aes(label = sprintf("%.2f", total_revenue)), position = position_dodge(width = 0.9), vjust = -0.5, size = 3.5) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+    labs(title = "Monthly Revenue", x = "Month", y = "Revenue"))
 
 # Dynamically generate filename with current date and time
 filename <- paste0("monthly_revenue_", 
@@ -427,7 +426,6 @@ kable(table_to_display, caption = "Monthly Best-Selling Products", col.names = c
 
 ## Monthly Shipping Efficiency
 # Convert dates to Date objects
-orders$order_date <- as.Date(orders$order_date)
 shipment$shipment_date <- as.Date(shipment$shipment_date)
 
 shipment_unique <- shipment %>% distinct(shipment_id, .keep_all = TRUE)
@@ -466,6 +464,8 @@ g_shiping_efficiency <- ggplot(monthly_stats, aes(x = month)) +
   labs(title = "Monthly Shipping Duration",
        x = "Month", y = "Shipping Duration (days)")
 
+print(g_shiping_efficiency)
+
 # Dynamically generate filename with current date and time
 filename <- paste0("monthly_shiping_efficiency_", 
                    format(Sys.time(), "%Y%m%d_%H%M%S"), ".png")
@@ -497,21 +497,25 @@ table_to_display <- monthly_stats %>%
   mutate(Time = format(month, "%Y-%m")) %>% 
   select(Time, Average_Delivery_Duration, Min_Delivery_Duration, Max_Delivery_Duration)
 
+# Calculate the overall average delivery duration
+overall_avg_delivery <- mean(combined_data$delivery_duration, na.rm = TRUE)
+
 # Display the table with kable
 kable(table_to_display, caption = "Monthly Delivery Duration", col.names = c("Time", "Average Duration", "Min Duration", "Max Duration"))
 
 # Visualize the statistics
 g_delivery_efficiency <- ggplot(monthly_stats, aes(x = month)) +
-  geom_line(aes(y = Average_Delivery_Duration), color = "steelblue", size = 1) +
-  geom_text(aes(y = Average_Delivery_Duration, 
-                label = sprintf("%.2f", Average_Delivery_Duration)), 
-            position = position_dodge(width = 0.9), vjust = -0.5, size = 3.5) +
-  scale_x_date(date_labels = "%b %Y", 
-               date_breaks = "1 month",
-               limits = c(min(monthly_stats$month), max(monthly_stats$month))) + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(title = "Monthly Delivery Duration",
-       x = "Month", y = "Delivery Duration (days)")
+    geom_line(aes(y = Average_Delivery_Duration), color = "steelblue", size = 1) +
+    geom_text(aes(y = Average_Delivery_Duration, 
+                  label = sprintf("%.2f", Average_Delivery_Duration)), 
+              position = position_dodge(width = 0.9), vjust = -0.5, size = 3.5) +
+    scale_x_date(date_labels = "%b %Y", 
+                 date_breaks = "1 month",
+                 limits = c(min(monthly_stats$month), max(monthly_stats$month))) + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(title = "Monthly Delivery Duration",
+         x = "Month", y = "Delivery Duration (days)")
+print(g_delivery_efficiency)
 
 # Dynamically generate filename with current date and time
 filename <- paste0("monthly_delivery_efficiency_", 
