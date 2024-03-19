@@ -2,6 +2,7 @@ library(readr)
 library(DBI)
 library(RSQLite)
 library(dplyr)
+library(digest)
 
 
 # Creating database connection
