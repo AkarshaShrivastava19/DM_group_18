@@ -626,6 +626,7 @@ if (nrow(promotion_possible_data) > 0)
 #Validations for shipment data
 
     
+    
     validate_and_prepare_shipment_data <- function(data) {
       # # Validation for shipment ID
       shipment_id_check <- grepl("^SHIP[0-9]{6}$", data$shipment_id)
@@ -676,16 +677,44 @@ if (nrow(promotion_possible_data) > 0)
     shipment_possible_data <- validate_and_prepare_shipment_data(shipment_possible_data)
     cat("Validation completed for new records.\n")
     
+    # Order data to ensure consistent hashing
+    shipment_possible_data <- shipment_possible_data[order(shipment_possible_data$shipment_id), ]
+    
+    # Generate pre-load hashes
+    pre_load_hashes <- sapply(1:nrow(shipment_possible_data), function(i) {
+      record <- as.character(unlist(shipment_possible_data[i, ]))
+      digest(paste(record, collapse = "|"), algo = "md5")
+    })
     if (nrow(shipment_possible_data) > 0) {
       cat("Starting to insert validated data into the database. Number of records: ", nrow(shipment_possible_data), "\n")
-      # Digesting prepared data to our database
-      dbWriteTable(connection, name = "shipment", value = shipment_possible_data, append = TRUE, row.names = FALSE)
-      cat("Data insertion completed successfully.\n")
+      tryCatch({
+        dbWriteTable(connection, name = "shipment", value = shipment_possible_data, append = TRUE, row.names = FALSE)
+        cat("Data insertion completed successfully.\n")
+      }, error = function(e) {
+        cat("Error inserting data into the database: ", e$message, "\n")
+      })
+      # Fetch the loaded data back for post-load hash comparison
+      loaded_shipment_ids <- sprintf("'%s'", shipment_possible_data$shipment_id)
+      query <- sprintf("SELECT * FROM shipment WHERE shipment_id IN (%s) ORDER BY shipment_id", paste(loaded_shipment_ids, collapse 
+                                                                                                      = ", "))
+      retrieved_shipments <- dbGetQuery(connection, query)
+      
+      post_load_hashes <- sapply(1:nrow(retrieved_shipments), function(i) {
+        record <- as.character(unlist(retrieved_shipments[i, ]))
+        digest(paste(record, collapse = "|"), algo = "md5")
+      })
+      
+      # Compare hashes
+      identical_hashes <- all(pre_load_hashes == post_load_hashes)
+      if (identical_hashes) {
+        cat("Data integrity verified: All record hashes match.\n")
+      } else {
+        cat("Data integrity check failed: Record hashes do not match.\n")
+      }
     } else {
       cat("No valid shipment data to insert into the database.\n")
-    }
+      }
     
-
 
 
 #Validations for product data
