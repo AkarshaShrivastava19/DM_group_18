@@ -4,23 +4,83 @@ editor: visual
 format:
   pdf:
     toc: true
-    toc-depth: 3
+    toc-depth: 4
     wrap: auto
-  docx:
-    toc: true
 ---
 
 # Introduction
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+E-commerce, which entails the buying and selling of goods and services over the internet, includes wide range of transactions, ranging from the online retail stores to the digital market places. It involves various activities, including online payments, digital marketing, and efficient supply chain management. In this project, the aim is to emphasise the ETL flow, automation and data analysis. This report outlines the framework that has been adopted for managing real-world e-commerce data environment comprehensively, covering end-to-end data management. The framework entails 4 major steps for the creation of the efficient Data Base Management System.
 
-# Part 1
+**1) Business Requirement -** This involves thorough understanding of the raw data, including aspects related to business.
 
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+**2) Conceptual Database Design -** This includes Entity-Relationship (E-R) modelling, which refers to the creation of the entities, their attributes and the intricate relationships between them. This is the core stage for creating the Database Management System.
 
-# Basic Analysis
+**3) Logical Database Design -** This involves translating the E-R model into the relational database, in which the entities are represented in the form of tables.\
+\
+**4) Physical Database Design -** This step involves creation of the tables using Data Definition Language (DDL) commands to store the data within the database, including the decisions on data types of the attributes.
 
-```{r Library the packages}
+# Part1 Database Design and Implementation
+
+## **1.1 Entity-Relationship Modelling**
+
+![Initial Draft of E-R Diagram](E-R%20Diagram%201.drawio.png)
+
+After the initial draft of the E-R diagram, subsequent analysis and data synthesis led to the significant refinements aimed at enhancing the efficieny and clarify of the database structure.
+
+1.  The transformation of the "orders" entity into a relationship between "customer" and "product" is justified because of the recognition that an order represents a transaction initiated by a customer for a specific product aligning more closely with real-world e-commerce processes and also this simplified the data model to avoid unnecessary complexity and redundancy. As a result order is an associative entity in the final E-R diagram.
+
+2.  Removal of the "payment" entity was justified by the ability to calculate the payment amounts dynamically based on the quantity and price attributes of the order relationship and product entity respectively. It also minimised the risk of discrepancies between the stored payment values and actual order details.
+
+3.  The "refund" entity was replaced with the refund status attribute within the order relationship. Recognising that the status of the refund is inherently tied to a specific order, making it more suitable as an attribute within the order relationship rather than a separate entity.
+
+4.  The "delivery" entity was replaced with a more detailed "shipment" entity, accommodating attributes such as shipment_id, shipment_date, and delivery_date, to optimise delivery tracking.
+
+![Final ER diagram](Final_E-R_Group%2018.drawio.png)
+
+After making all the above significant changes the revised E-R diagram has 6 entities that are customer, category, supplier, promotion, shipment, and product. The assumptions that have been taken into consideration for the above E-R modelling are:
+
+-   Promotion is only applied to the product.
+
+-   There is only one and full final payment for one order that will be calculated using the price, quantity and promotion discount value.
+
+-   One order is being shipped and delivered at once, and one order can have many products.
+
+-   If one supplier is supplying a particular product, then that product is not going to be supplied by any other supplier. For e.g. if we have product called "ABC Smartphone". Supplier A exclusively manufactures and supplies the product to our e-commerce platform, and no other supplier can supply the same product.
+
+**Logical Database Schema:**
+
+The general form of representing the entities and attributes in logical schema is:
+
+relation_name {attribute 1, attribute2, attribute3, .....attribute n}
+
+The below represents the logical database schema comprising entities and their attributes derived from the E-R diagram. A single underline represents the Primary Key and a double underline represents the Foreign Key in the table.
+
+![Logical Schema](Logical%20Schema.png)
+
+**Relationship sets:**
+
+![](Relationship%20Set%20(1).drawio.png)
+
+Figure 3 illustrates many-to-many (M:N) relationship between customer and product, indicating that multiple customers can order multiple products, and conversely multiple products can be ordered by various customers.
+
+Figure 4 illustrates one-to-many (1:N) relationship between promotion and product, that a single promotion code may be applied to multiple products, whereas multiple products can be associated with a single promotion code only.
+
+![](Relationship%20Set(2).drawio.png)
+
+Figure 5 illustrates one-to-many (1:N) relationship between supplier and product. This indicates that a single supplier can supply multiple products, and multiple products can be supplied by a single supplier.
+
+Figure 6 illustrates many-to-one (N:1) relationship between product and category, where multiple products can be categorised under a single category, while each category can have multiple products.
+
+![](Relationship%20Set(3).drawio.png)
+
+Figure 7 illustrates one-to-many (1:N) recursive relationship involving the customer entity. This indicates that while one customer can refer multiple customers, where each customer can only be referred by one customer. The number ''1'' above the relationship lines represents the referrer role and ''2'' represents the referent.
+
+## **1.2 SQL Database Schema Creation**
+
+In this part, E-R diagram is translated into a functional SQL database schema.
+
+```{r Library the packages, echo=FALSE, message=FALSE, warning=FALSE}
 library(DBI)
 library(RSQLite)
 library(readr)
@@ -29,12 +89,925 @@ library(lubridate)
 library(ggplot2)
 library(tidyr)
 library(knitr)
+knitr::opts_chunk$set(echo = TRUE, attr.source='.numberLines')
 ```
 
-```{r Library Packages}
-#Connecting to the database
+```{r, echo=FALSE}
+# Establishing the connection
 connection <- RSQLite::dbConnect(RSQLite::SQLite(), "ecomdata.db")
+```
 
+Creating table schema for all tables
+
+1.  Creating customer table
+
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+RSQLite::dbExecute(connection,"
+
+CREATE TABLE IF NOT EXISTS customer ( 
+
+    customer_id VARCHAR(10) PRIMARY KEY, 
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL, 
+    email VARCHAR(50) NOT NULL, 
+    gender VARCHAR(20) NOT NULL,
+    age INT NOT NULL,
+    career VARCHAR(50) NOT NULL,
+    customer_phone VARCHAR(20) NOT NULL, 
+    address_country VARCHAR(50) NOT NULL,
+    address_zipcode VARCHAR(20) NOT NULL,
+    address_city VARCHAR(20) NOT NULL,
+    address_street VARCHAR(50) NOT NULL,
+    referred_by VARCHAR(10) NULL
+    
+);
+")
+
+```
+
+2.  Creating category table
+
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+RSQLite::dbExecute(connection,"
+
+CREATE TABLE IF NOT EXISTS category ( 
+
+    category_id VARCHAR(10) PRIMARY KEY, 
+    category_name VARCHAR(50) NOT NULL
+
+);
+
+")
+
+```
+
+3.  Creating supplier table
+
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+RSQLite::dbExecute(connection,"
+CREATE TABLE IF NOT EXISTS supplier ( 
+
+    supplier_id VARCHAR(10) PRIMARY KEY, 
+    supplier_name VARCHAR(50) NOT NULL
+    
+);
+
+")
+
+```
+
+4.  Creating promotion table
+
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+RSQLite::dbExecute(connection,"
+
+CREATE TABLE IF NOT EXISTS promotion ( 
+
+    promotion_id VARCHAR(10) PRIMARY KEY, 
+    promotion_name VARCHAR(20) NOT NULL,
+    promotion_start_date DATE NOT NULL,
+    promotion_end_date DATE NOT NULL,
+    promotion_discount_value FLOAT NOT NULL
+    
+);
+
+")
+
+```
+
+5.  Creating shipment table
+
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+RSQLite::dbExecute(connection,"
+
+CREATE TABLE IF NOT EXISTS shipment ( 
+
+    shipment_id VARCHAR(10) PRIMARY KEY,
+    shipment_date DATE NOT NULL,
+    delivery_date DATE NOT NULL
+);
+
+")
+```
+
+6.  Creating product table
+
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+RSQLite::dbExecute(connection,"
+
+CREATE TABLE IF NOT EXISTS product ( 
+
+    product_id VARCHAR(10) PRIMARY KEY, 
+    category_id VARCHAR(10) NOT NULL,
+    supplier_id VARCHAR(10) NOT NULL, 
+    promotion_id VARCHAR(10) NULL, 
+    product_name VARCHAR(20) NOT NULL,
+    price INT NOT NULL,
+    quantity_stock INT NOT NULL,
+    quantity_supplied INT NOT NULL, 
+    review_score FLOAT NOT NULL,
+    FOREIGN KEY ('category_id') REFERENCES category('category_id'), 
+    FOREIGN KEY ('supplier_id') REFERENCES supplier('supplier_id'), 
+    FOREIGN KEY ('promotion_id') REFERENCES promotion('promotion_id')     
+   
+);
+
+")
+
+```
+
+7.  Creating orders table
+
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+RSQLite::dbExecute(connection,"
+
+CREATE TABLE IF NOT EXISTS orders ( 
+
+    order_id VARCHAR(20) NOT NULL, 
+    customer_id VARCHAR(10) NOT NULL,
+    product_id VARCHAR(10) NOT NULL,
+    shipment_id VARCHAR(10) NOT NULL,
+    quantity INT NOT NULL,
+    refund_status VARCHAR(20) NOT NULL,
+    order_date DATE NOT NULL,
+    FOREIGN KEY ('customer_id') REFERENCES customer('customer_id'), 
+    FOREIGN KEY ('product_id') REFERENCES product('product_id'),
+    FOREIGN KEY ('shipment_id') REFERENCES shipment('shipment_id')
+    PRIMARY KEY (order_id,product_id,customer_id,shipment_id)
+
+
+);
+
+")
+```
+
+After creating the schema, below lists all of the tables from the database to check what have been created.
+
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+RSQLite::dbListTables(connection)
+```
+
+In the development of our database (ecomdata.db), the principle of ETL (Extract, Transform, Load) was used rather than ELT (Extract, Load, Transform) as ETL is more efficient than ELT in various aspects such as in ETL we can clean and transform the data before loading it into the database tables. This indicates that the data warehouse or database has only verified data, resulting in good data quality and consistency. Also, as the transformation happens before loading, any mistakes or inconsistencies may be discovered and handled immediately, lowering the risk of ingesting the faulty data into the database. The process by which we employed ETL in our project is described below -
+
+**Extract** - The process began with the extraction of data that was generated using both Large Language Models (LLMs) and Mockaroo, which aligns with the extraction phase, where data is collected from various sources and prepared for further processing.
+
+**Transform** - After data extraction, the transformation process involved converting the extracted data into CSV files and further we performed some validation tests. This step was taken to ensure the data quality and consistency, which is the most crucial part of the ETL transformation. Furthermore, normalisation processes were used to standardise the data, for improving its integrity.
+
+**Load** - Finally, the validated and normalised data was loaded into the tables in the database for further analysis.
+
+# Part 2 **Data Generation and Management**
+
+## **2.1 Synthetic Data Generation**
+
+Based on the logical schema, the physical schema involved establishing the details in the database, including tables, columns, relationships, and constraints. Furthermore, the attributes of each entity ensured that the normalisation issues were resolved. Following this, the dependancy between entities prioritised the order when generating the data. Thus, the data within the 1:N entity were created before the M:N entity due to the foreign key for the associative entity.
+
+| Order | Entity / Associative Entity | Number of Observations |
+|:-----:|:---------------------------:|:----------------------:|
+|   1   |          supplier           |           20           |
+|   2   |          category           |           20           |
+|   3   |          promotion          |           30           |
+|   4   |          customer           |          200           |
+|   5   |           product           |          200           |
+|   6   |          shipment           |          389           |
+|   7   |           orders            |          389           |
+
+: Data Generation Order
+
+Based on the nature of each attribute, customer data was created through "Mockaroo" to obtain the initial data.
+
+![Data generation screenshot on mockaroo website](Screenshot%202024-03-18%20at%205.28.35%20PM.png)
+
+However, the generated data lacks authentic features, such as age, career, and address, and has no logical meaning for each customer. To make data reflect realistic patterns and distributions, further LLM was used to enhance the practical characteristics of the initial data. The following images show the ChatGPT prompts.
+
+![Data improvement request to ChatGPT for customer table](Screenshot%202024-03-18%20at%205.22.14%20PM.png)
+
+![Data improvement request to ChatGPT for category table](WhatsApp%20Image%202024-03-19%20at%2014.30.51-category.jpeg)
+
+![Data improvement request to ChatGPT for supplier table](WhatsApp%20Image%202024-03-19%20at%2014.30.52%20(4)-supplier.jpeg)
+
+![Data improvement request to ChatGPT for promotion table](WhatsApp%20Image%202024-03-19%20at%2014.30.52%20(2)-promotion.jpeg)
+
+![Data improvement request to ChatGPT for shipment table](WhatsApp%20Image%202024-03-19%20at%2014.30.52%20(3)-shipment.jpeg)
+
+![Data improvement request to ChatGPT for product table](WhatsApp%20Image%202024-03-19%20at%2014.30.52%20(1)-product.jpeg)
+
+![Data improvement request to ChatGPT for order table](WhatsApp%20Image%202024-03-19%20at%2014.30.52-order.jpeg)
+
+## **2.2 Data Import and Quality Assurance**
+
+The report entails the detailed R code that was developed, alongside with the creation of CSV files of the normalised data. Subsequently validation checks were performed on the data to ensure the data quality standards. These validation checks were essential to ensure the accuracy, completeness, and consistency of the data. On the successful validation, the verified data was loaded into the tables in the database. The database created is named as "ecomdata.db".
+
+For example, Certain validation checks were performed on the attributes of the customer data in the CSV file to ensure the data accuracy which was essential for the further analysis such as:
+
+-   Email - The customer requires to enter a valid email id.
+
+-   Gender - It has 4 categories that is "male", "Male", "female", "Female".
+
+-   Age - The age of the customer should be in the range of 1 to 100.
+
+-   Zip Code - It should contain 6 characters with a space after 3 characters.
+
+-   Referred Check - The new customers that are being referred, their customer id should be presented in the customer_id column in the customer table.
+
+Similarly, certain validations were performed for other CSV files before loading them in the database.
+
+### Reading the files
+
+Firstly, all the CSV files are listed before doing the validations.
+
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+all_files <- list.files("data_upload/")
+all_files
+```
+
+### Creating a loop to read all files and list number of rows and columns in each file
+
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+for (variable in all_files) {
+  filepath <- paste0("data_upload/",variable)
+  file_contents <- readr::read_csv(filepath)
+  
+  number_of_rows <- nrow(file_contents)
+  number_of_columns <- ncol(file_contents)
+  
+  #Printing the number of rows and columns in each file  
+  print(paste0("The file: ",variable,
+               " has: ",
+               format(number_of_rows,big.mark = ","),
+               " rows and ",
+               number_of_columns," columns"))
+  
+  number_of_rows <- nrow(file_contents)
+  
+  print(paste0("Checking for file: ",variable))
+  
+  
+  #Printing True if the first column is the primary key column else printing False  
+  print(paste0(" is ",nrow(unique(file_contents[,1]))==number_of_rows))
+}
+```
+
+### Structure of data
+
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+for (variable in all_files) {
+  filepath <- paste0("data_upload/",variable)
+  file_contents <- readr::read_csv(filepath)
+  str_data <-str(file_contents)
+  print(paste0(str_data,"Sructure of the file ", variable))
+}
+```
+
+### Number of columns and their column names
+
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+for (variable in all_files) {
+  filepath <- paste0("data_upload/",variable)
+  file_contents <- readr::read_csv(filepath)
+  column_names <-colnames(file_contents)
+  print(paste0("File ", variable, " has column as ",column_names))
+}
+```
+
+### Checking unique id column as the primary key in each table
+
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+for (variable in all_files) {
+  filepath <- paste0("data_upload/", variable)
+  file_contents <- readr::read_csv(filepath)
+  primary_key <- nrow(unique(file_contents[,1])) == nrow(file_contents)
+  print(paste0("Primary key of ", variable, " is ", primary_key))
+}
+```
+
+### Data Validation for Each Table
+
+1.  Validation for customer data
+
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+fetch_existing_customer_ids <- function(connection) {
+  query <- "SELECT DISTINCT customer_id FROM customer"
+  existing_ids <- dbGetQuery(connection, query)$customer_id
+  return(existing_ids)
+  
+}
+
+#Customer data validation and Reffered by referencial integrity
+validate_and_prepare_customer_data <- function(data, existing_ids) {
+  
+  #Validation for customer ID  
+  customer_id_check <- grepl("^CUST[0-9]{6}$", data$customer_id)
+  data <- data[customer_id_check, ]
+  
+  #Validation for email
+  email_check <- grepl("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", data$email)
+  data<- data[email_check, ]
+  
+  #Validation for gender
+  gender_check <- c("male","female","Female","Male")
+  data<- data[data$gender %in% gender_check, ]
+  
+  #Validation for age
+  age_check <- 1:100
+  data <- data[data$age %in% age_check, ]
+  
+  #Validation for phone number
+  phone_check <- grepl("^\\+44 \\d{10}$", data$customer_phone)
+  data <- data[phone_check, ]
+  
+  #Validation for zip code
+  zipcode_check <- grepl("^\\w{3} \\w{3}$", data$address_zipcode)
+  data <- data[zipcode_check, ]
+  
+  #Reffered by check
+  unique_customer_ids <- unique(c(data$customer_id, existing_ids))
+  #Validate 'referred by' IDs
+  valid_referral_flags <- (data$referred_by == "") | data$referred_by %in% unique_customer_ids
+  data <- data[valid_referral_flags, ]
+  
+  return(data)
+}
+
+#Fetch existing customer IDs from the database
+existing_customer_ids <- fetch_existing_customer_ids(connection)
+
+customer_file_paths <- list.files(path = "data_upload", pattern = "customer.*\\.csv$", full.names = TRUE)
+#Initialising empty dataframe
+customer_possible_data <- data.frame()  
+
+customer_primary_key <- "customer_id"
+
+#Read each customer CSV file and check for the existence of the primary key in the database before appending
+for (file_path in customer_file_paths) {
+  cat("Starting processing file:", file_path, "\n")
+  #Read the current file
+  customer_data <- read.csv(file_path)
+  
+  #Iterate through each row of the file
+  for (i in seq_len(nrow(customer_data))) {
+    new_record <- customer_data[i, ]
+    primary_key_value <- new_record[[customer_primary_key]]
+    conditions <- paste(customer_primary_key, "=", paste0("'", primary_key_value, "'"))
+    
+    #Check if a record with the same primary key exists in the database
+    record_exists_query <- paste("SELECT COUNT(*) FROM customer WHERE", conditions)
+    record_exists_result <- dbGetQuery(connection, record_exists_query)
+    record_exists <- record_exists_result[1, 1] > 0
+    
+    if(record_exists) {
+      cat("Record with primary key", primary_key_value, "already exists in the database.\n")
+    }  
+    if (!record_exists) {
+      #Check if the primary key value of the new record is unique in the temporary dataframe
+      if (!primary_key_value %in% customer_possible_data[[customer_primary_key]]) {
+        customer_possible_data <- rbind(customer_possible_data, new_record)
+      }
+    }
+    
+    cat("Finished processing file:", file_path, "\n")
+    
+  }
+  cat("Starting validation for new records.\n")
+  customer_possible_data <- validate_and_prepare_customer_data(customer_possible_data, existing_customer_ids)
+  cat("Validation completed for new records.\n")
+}
+
+
+if (nrow(customer_possible_data) > 0) 
+{
+  cat("Starting to insert validated data into the database. Number of records: ", nrow(customer_possible_data), "\n")
+  
+  #Ingesting prepared data to our database
+  dbWriteTable(connection, name = "customer", value = customer_possible_data, append = TRUE, row.names = FALSE)
+  cat("Data insertion completed successfully.\n")
+} else 
+{
+  cat("No valid customer data to insert into the database.\n")
+}
+```
+
+Recursive relationship in the customer table
+
+In the ‘customer’ table, ‘customer_id’ serves as the primary key, that uniquely identifies each customer and ‘referred_by’ is the attribute that defines the customer who refers this customer serving as the link between different customers within the same customer table.
+
+2.  Validations for category data
+
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+validate_and_prepare_category_data <- function(data) {
+  
+  # Validation for category ID
+  category_id_check <- grepl("^[A-Za-z0-9]{10}$", data$category_id)
+  data <- data[category_id_check,]
+  
+  return(data) 
+}
+
+# Fetch existing category IDs from the database
+
+category_file_paths <- list.files(path = "data_upload", pattern = "category.*\\.csv$", full.names = TRUE)
+
+# Define the primary key column for the category table
+category_primary_key <- "category_id"
+
+#Initialising empty data frame
+category_possible_data <- data.frame() 
+
+# Read each category CSV file and check for the existence of the primary key in the database before appending
+for (file_path in category_file_paths) {
+  
+  cat("Starting processing file:", file_path, "\n")
+  
+  # Read the current file
+  category_data <- readr::read_csv(file_path)
+  
+  # Iterate through each row of the file
+  for (i in seq_len(nrow(category_data))) {
+    new_record <- category_data[i, ]
+    primary_key_value <- new_record[[category_primary_key]]
+    conditions <- paste(category_primary_key, "=", paste0("'", primary_key_value, "'"))
+    
+    # Check if a record with the same primary key exists in the database
+    record_exists_query <- paste("SELECT COUNT(*) FROM category WHERE", conditions)
+    record_exists_result <- dbGetQuery(connection, record_exists_query)
+    record_exists <- record_exists_result[1, 1] > 0
+    
+    if(record_exists) {
+      cat("Record with primary key", primary_key_value, "already exists in the database.\n")
+    }  
+    if (!record_exists) {
+      # Check if the primary key value of the new record is unique in the temporary dataframe
+      if (!primary_key_value %in% category_possible_data[[category_primary_key]]) {
+        category_possible_data <- rbind(category_possible_data, new_record)
+      }
+    }
+    
+    cat("Finished processing file:", file_path, "\n")
+    
+  }
+  
+}
+cat("Starting validation for new records.\n")
+category_possible_data <- validate_and_prepare_category_data(category_possible_data)
+cat("Validation completed for new records.\n")
+
+if (nrow(category_possible_data) > 0) {
+  cat("Starting to insert validated data into the database. Number of records: ", nrow(category_possible_data), "\n")
+  
+  # Ingesting prepared data to our database
+  dbWriteTable(connection, name = "category", value = category_possible_data, append = TRUE, row.names = FALSE)
+  cat("Data insertion completed successfully.\n")
+} else 
+{
+  cat("No valid category data to insert into the database.\n")
+}
+
+```
+
+3.  Validations for supplier data
+
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+validate_and_prepare_supplier_data <- function(data) {
+  # Validation for supplier ID
+  supplier_id_check <- grepl("^[A-Za-z0-9]{10}$", data$supplier_id)
+  data <- data[supplier_id_check,]
+  
+  return(data) 
+}
+
+# Fetch existing supplier IDs from the database
+
+supplier_file_paths <- list.files(path = "data_upload", pattern = "supplier.*\\.csv$", full.names = TRUE)
+
+# Define the primary key column for the supplier table
+supplier_primary_key <- "supplier_id"
+
+#Initialising empty data frame
+supplier_possible_data <- data.frame() 
+
+# Read each supplier CSV file and check for the existence of the primary key in the database before appending
+for (file_path in supplier_file_paths) {
+  
+  cat("Starting processing file:", file_path, "\n")
+  
+  # Read the current file
+  supplier_data <- readr::read_csv(file_path)
+  
+  # Iterate through each row of the file
+  for (i in seq_len(nrow(supplier_data))) {
+    new_record <- supplier_data[i, ]
+    primary_key_value <- new_record[[supplier_primary_key]]
+    conditions <- paste(supplier_primary_key, "=", paste0("'", primary_key_value, "'"))
+    
+    # Check if a record with the same primary key exists in the database
+    record_exists_query <- paste("SELECT COUNT(*) FROM supplier WHERE", conditions)
+    record_exists_result <- dbGetQuery(connection, record_exists_query)
+    record_exists <- record_exists_result[1, 1] > 0
+    
+    if(record_exists) {
+      cat("Record with primary key", primary_key_value, "already exists in the database.\n")
+    }  
+    if (!record_exists) {
+      # Check if the primary key value of the new record is unique in the temporary dataframe
+      if (!primary_key_value %in% supplier_possible_data[[supplier_primary_key]]) {
+        supplier_possible_data <- rbind(supplier_possible_data, new_record)
+      }
+    }
+    
+    cat("Finished processing file:", file_path, "\n")
+    
+  }
+  
+}
+    cat("Starting validation for new records.\n")
+    supplier_possible_data <- validate_and_prepare_supplier_data(supplier_possible_data)
+    cat("Validation completed for new records.\n")
+
+if (nrow(supplier_possible_data) > 0) {
+  cat("Starting to insert validated data into the database. Number of records: ", nrow(supplier_possible_data), "\n")
+  
+  # Ingesting  prepared data to our database
+  dbWriteTable(connection, name = "supplier", value = supplier_possible_data, append = TRUE, row.names = FALSE)
+  cat("Data insertion completed successfully.\n")
+} else 
+{
+  cat("No valid supplier data to insert into the database.\n")
+}
+```
+
+4.  Validations for promotion data
+
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+validate_and_prepare_promotion_data <- function(data) {
+
+# Validation for promotion ID
+promotion_id_check <- grepl("^[A-Za-z0-9]{10}$", data$promotion_id)
+data <- data[promotion_id_check, ]
+
+#Checking for the validation of the promotion_start_date and promotion_end_date in the promotion table
+date_check <- !is.na(as.Date(data$promotion_start_date, format = "%d-%m-%Y")) &
+!is.na(as.Date(data$promotion_end_date, format = "%d-%m-%Y")) &
+as.Date(data$promotion_start_date, format = "%d-%m-%Y") < as.Date(data$promotion_end_date, format = "%d-%m-%Y")
+
+#Check for the validation of the promotion_start_date and promotion_end_date in the promotion   table.
+#promotion_start_date and promotion_end_data should be in correct form for eg 12/11/2023
+date_format <- "%d-%m-%Y"
+date_check <- !is.na(as.Date(data$promotion_start_date, format = date_format)) &
+!is.na(as.Date(data$promotion_end_date, format = date_format)) &
+as.Date(data$promotion_start_date, format = date_format) < as.Date(data$promotion_end_date, format = date_format)
+data <- data[date_check,]
+
+
+#Check for the validation of the column promotion_discount_value in the promotion table.
+#promotion_discount_value should be <1
+
+discount_value_check <- !is.na(data$promotion_discount_value) &
+is.numeric(data$promotion_discount_value) &
+data$promotion_discount_value < 1
+data <- data[discount_value_check,]
+return(data)
+}
+
+
+# Fetch existing promotion IDs from the database
+
+promotion_file_paths <- list.files(path = "data_upload", pattern = "promotion.*\\.csv$", full.names = TRUE)
+
+# Define the primary key column for the promotion table
+promotion_primary_key <- "promotion_id"
+
+#Initialising empty data frame
+promotion_possible_data <- data.frame() 
+
+
+# Read each promotion CSV file and check for the existence of the primary key in the database before appending
+for (file_path in promotion_file_paths) {
+
+cat("Starting processing file:", file_path, "\n")
+
+# Read the current file
+promotion_data <- readr::read_csv(file_path)
+
+# Iterate through each row of the file
+for (i in seq_len(nrow(promotion_data))) {
+new_record <- promotion_data[i, ]
+primary_key_value <- new_record[[promotion_primary_key]]
+conditions <- paste(promotion_primary_key, "=", paste0("'", primary_key_value, "'"))
+
+# Check if a record with the same primary key exists in the database
+record_exists_query <- paste("SELECT COUNT(*) FROM promotion WHERE", conditions)
+record_exists_result <- dbGetQuery(connection, record_exists_query)
+record_exists <- record_exists_result[1, 1] > 0
+
+if(record_exists) {
+  cat("Record with primary key", primary_key_value, "already exists in the database.\n")
+}  
+if (!record_exists) {
+  # Check if the primary key value of the new record is unique in the temporary dataframe
+  if (!primary_key_value %in% promotion_possible_data[[promotion_primary_key]]) {
+    promotion_possible_data <- rbind(promotion_possible_data, new_record)
+  }
+}
+
+cat("Finished processing file:", file_path, "\n")
+
+}
+}
+cat("Starting validation for new records.\n")
+promotion_possible_data <- validate_and_prepare_promotion_data(promotion_possible_data)
+cat("Validation completed for new records.\n")
+
+
+if (nrow(promotion_possible_data) > 0) 
+{
+cat("Starting to insert validated data into the database. Number of records: ", nrow(promotion_possible_data), "\n")
+# Digesting prepared data to our database
+dbWriteTable(connection, name = "promotion", value = promotion_possible_data, append = TRUE, row.names = FALSE)
+cat("Data insertion completed successfully.\n")
+} else 
+{
+cat("No valid promotion data to insert into the database.\n")
+}
+```
+
+5.  Validations for shipment data
+
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+validate_and_prepare_shipment_data <- function(data) {
+# Validation for shipment ID
+shipment_id_check <- grepl("^SHIP[0-9]{6}$", data$shipment_id)
+data <- data[shipment_id_check,]
+
+  # Convert dates from character to Date object
+  data$shipment_date <- as.Date(data$shipment_date, format = "%d-%m-%Y")
+  data$delivery_date <- as.Date(data$delivery_date, format = "%d-%m-%Y")
+
+  # Validation for shipment_date and delivery_date format
+  date_format_check <- !is.na(data$shipment_date) & !is.na(data$delivery_date)
+
+  # Keep only rows with valid date formats
+  data <- data[date_format_check,]
+
+  # Validation for logical order of shipment and delivery dates
+  logical_date_order_check <- data$shipment_date <= data$delivery_date
+
+  # Keep only rows with logical date order
+  data <- data[logical_date_order_check,]
+
+return(data) 
+}
+
+# Fetch existing shipment IDs from the database
+
+shipment_file_paths <- list.files(path = "data_upload", pattern = "shipment.*\\.csv$", full.names = TRUE)
+
+# Define the primary key column for the shipment table
+shipment_primary_key <- "shipment_id"
+
+#Initialising empty data frame
+shipment_possible_data <- data.frame() 
+
+# Read each shipment CSV file and check for the existence of the primary key in the database before appending
+for (file_path in shipment_file_paths) {
+
+cat("Starting processing file:", file_path, "\n")
+
+# Read the current file
+shipment_data <- readr::read_csv(file_path)
+
+# Iterate through each row of the file
+for (i in seq_len(nrow(shipment_data))) {
+new_record <- shipment_data[i, ]
+primary_key_value <- new_record[[shipment_primary_key]]
+conditions <- paste(shipment_primary_key, "=", paste0("'", primary_key_value, "'"))
+
+# Check if a record with the same primary key exists in the database
+record_exists_query <- paste("SELECT COUNT(*) FROM shipment WHERE", conditions)
+record_exists_result <- dbGetQuery(connection, record_exists_query)
+record_exists <- record_exists_result[1, 1] > 0
+
+if(record_exists) {
+  cat("Record with primary key", primary_key_value, "already exists in the database.\n")
+}  
+if (!record_exists) {
+  # Check if the primary key value of the new record is unique in the temporary dataframe
+  if (!primary_key_value %in% shipment_possible_data[[shipment_primary_key]]) {
+    shipment_possible_data <- rbind(shipment_possible_data, new_record)
+  }
+}
+
+cat("Finished processing file:", file_path, "\n")
+
+}
+}
+cat("Starting validation for new records.\n")
+shipment_possible_data <- validate_and_prepare_shipment_data(shipment_possible_data)
+cat("Validation completed for new records.\n")
+
+if (nrow(shipment_possible_data) > 0) {
+  cat("Starting to insert validated data into the database. Number of records: ", nrow(shipment_possible_data), "\n")
+  # Ingesting prepared data to our database
+  dbWriteTable(connection, name = "shipment", value = shipment_possible_data, append = TRUE, row.names = FALSE)
+  cat("Data insertion completed successfully.\n")
+} else {
+  cat("No valid shipment data to insert into the database.\n")
+}
+
+```
+
+6.  Validations for product data
+
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+validate_and_prepare_product_data <- function(data) {
+
+# Validation for product ID
+product_id_check <- grepl("^[A-Za-z0-9]{10}$", data$product_id)
+data <- data[product_id_check, ]
+
+# Performing validation checks here
+data <- data[data$review_score >= 1 & data$review_score <= 5, ]
+
+return(data)
+}
+
+
+# Fetch existing product IDs from the database
+
+product_file_paths <- list.files(path = "data_upload", pattern = "product.*\\.csv$", full.names = TRUE)
+
+# Define the primary key column for the product table
+product_primary_key <- "product_id"
+
+#Initialising empty data frame
+product_possible_data <- data.frame() 
+
+
+# Read each product CSV file and check for the existence of the primary key in the database before appending
+for (file_path in product_file_paths) {
+
+cat("Starting processing file:", file_path, "\n")
+
+# Read the current file
+product_data <- readr::read_csv(file_path)
+
+# Iterate through each row of the file
+for (i in seq_len(nrow(product_data))) {
+new_record <- product_data[i, ]
+primary_key_value <- new_record[[product_primary_key]]
+conditions <- paste(product_primary_key, "=", paste0("'", primary_key_value, "'"))
+
+# Check if a record with the same primary key exists in the database
+record_exists_query <- paste("SELECT COUNT(*) FROM product WHERE", conditions)
+record_exists_result <- dbGetQuery(connection, record_exists_query)
+record_exists <- record_exists_result[1, 1] > 0
+
+if(record_exists) {
+  cat("Record with primary key", primary_key_value, "already exists in the database.\n")
+}  
+if (!record_exists) {
+  # Check if the primary key value of the new record is unique in the temporary dataframe
+  if (!primary_key_value %in% product_possible_data[[product_primary_key]]) {
+    product_possible_data <- rbind(product_possible_data, new_record)
+  }
+}
+
+cat("Finished processing file:", file_path, "\n")
+
+}
+}
+cat("Starting validation for new records.\n")
+product_possible_data <- validate_and_prepare_product_data(product_possible_data)
+cat("Validation completed for new records.\n")
+
+if (nrow(product_possible_data) > 0) 
+{
+cat("Starting to insert validated data into the database. Number of records: ", nrow(product_possible_data), "\n")
+# Digesting prepared data to our database
+dbWriteTable(connection, name = "product", value = product_possible_data, append = TRUE, row.names = FALSE)
+cat("Data insertion completed successfully.\n")
+} else 
+{
+cat("No valid product data to insert into the database.\n")
+}
+```
+
+7.  Validation for orders data
+
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+validate_and_prepare_orders_data <- function(data){
+# Checking format of order id  
+order_id_check <- grepl("^ORDER[0-9]{9}$", data$order_id)
+data <- data[order_id_check, ]
+
+# Checking format of customer id  
+customer_id_check <- grepl("^CUST[0-9]{6}$", data$customer_id)
+data <- data[customer_id_check, ]
+
+# Checking format of product id  
+product_id_check <- grepl("^[A-Za-z0-9]{10}$", data$product_id)
+data <- data[product_id_check, ]
+
+# Checking format of shipment id  
+shipment_id_check <- grepl("^SHIP[0-9]{6}$", data$shipment_id)
+data <- data[shipment_id_check,]
+
+# Validation for order_date format
+order_date_format_check <- !is.na(as.Date(data$order_date, format = "%d-%m-%Y"))
+data <- data[order_date_format_check,]
+
+
+return(data) 
+}
+    
+    
+orders_file_paths <- list.files(path = "data_upload", pattern = "orders.*\\.csv$", full.names = TRUE)
+orders_possible_data <- data.frame()  
+
+
+# Read each orders CSV file and check for the existence of the composite primary key in the database before appending
+for (file_path in orders_file_paths) {
+orders_data <- readr::read_csv(file_path)
+
+# Iterate through each row of the file
+for (i in seq_len(nrow(orders_data))) {
+new_record <- orders_data[i, ]
+# primary_key_value <- new_record[[orders_primary_key]]
+# Construct the condition to check the composite primary key (order_id, product_id, customer_id, shipment_id)
+conditions <- sprintf("order_id = '%s' AND product_id = '%s' AND customer_id = '%s' AND shipment_id = '%s'", 
+                      new_record$order_id, new_record$product_id, new_record$customer_id, new_record$shipment_id)
+
+# Check if a record with the same composite primary key exists in the database
+record_exists_query <- paste("SELECT COUNT(*) FROM orders WHERE", conditions)
+record_exists_result <- dbGetQuery(connection, record_exists_query)
+record_exists <- record_exists_result[1, 1] > 0
+
+
+if(!record_exists) {
+# Construct a unique identifier for the composite primary key
+composite_key <- paste(new_record$order_id, new_record$product_id, new_record$customer_id, new_record$shipment_id, sep = "-")
+
+# Check if the composite primary key is unique in the temporary dataframe
+existing_keys <- sapply(1:nrow(orders_possible_data), function(i) {
+  paste(orders_possible_data[i, "order_id"], orders_possible_data[i, "product_id"], orders_possible_data[i, "customer_id"], orders_possible_data[i, "shipment_id"], sep = "-")
+  })
+          
+      if (!composite_key %in% existing_keys) {
+        orders_possible_data <- rbind(orders_possible_data, new_record)
+      } else {
+        cat("Record with composite primary key already exists in temporary data.\n")
+      }
+    } else {
+      cat("Record with composite primary key already exists in the database.\n")
+    }
+  }
+}
+orders_possible_data <- validate_and_prepare_orders_data(orders_possible_data)
+
+if (nrow(orders_possible_data) > 0) {
+  cat("Starting to insert validated data into the database. Number of records: ", nrow(orders_possible_data), "\n")
+  
+  # Ingesting prepared data to our database
+ 
+   dbWriteTable(connection, name = "orders", value = orders_possible_data, append = TRUE, row.names = FALSE)
+  cat("Data insertion completed successfully.\n")
+} else {
+  cat("No valid orders data to insert into the database.\n")
+}
+
+```
+
+### Referential Integrity for ensuring data integrity 
+
+The foreign key is the crucial component of a database that enforces referential integrity, ensuring that a value appearing in one relation for a specified set of attributes also exists in another relation for a corresponding set of the attributes. In all, referential integrity ensures that a value referenced in one table exists in another table, maintaining the integrity and consistency of the data.
+
+In the ‘category’ table, ‘category_id’ serves as the primary key, that uniquely identifies each category of the product. On the other hand, in products table ‘category_id’ serves as the foreign key. It means if one of the category ids is removed from the category table then the it should be removed from the product table as well.
+
+# Part 3 Data Pipeline Generation
+
+## **3.1 GitHub Repository and Workflow Setup**
+
+In this part, a GitHub repository named "DM_Group_18" was created and connected it to the Posit cloud to manage and version control our project. It also acted as the central hub of our project which helped the team members to collaborate effectively. In the repository the CSV files were uploaded in the folder named "data_upload". Also, the R scripts for database schema creation, validation and analysis could be found in the folder named "R".
+
+The URL of the repository - <https://github.com/AkarshaShrivastava19/DM_group_18>
+
+![Created GitHub Repository](GitHub%20Branch.png)
+
+## **3.2 GitHub Actions for Continuous Integration**
+
+Here, we implemented GitHub actions to automate different stages of our data pipeline such as database updates, data validation and data analysis. The workflow was configured to trigger each time we push new changes to the main branch from Posit cloud ensuring that the automated tasks were executed in response to the relevant changes.
+
+This workflow runs seamlessly on the latest Ubuntu Environment and has multiple jobs such as setting up the R environment, installing packages, running the R scripts and updating the database with the latest data. So, after the detection of any changes the workflow activates in response to any "pull" and "push" request. We configured to automatically update the database, run data validations and analysis.
+
+By implementing this, we significantly reduced manual intervention required for this process thus increasing the efficiency and reducing human errors. It also helped us in rapid detection and resolution of the issues.
+
+![Successfully Build Workflow](Build%20success.png)
+
+# Part 4 **Data Analysis and Reporting**
+
+The following data analysis was performed on the generated e-commerce data.
+
+## **4.1 Advanced Data Analysis in R**
+
+```{r}
 # Retrieve data from the database
 customer <- dbGetQuery(connection, "SELECT * FROM customer")
 product <- dbGetQuery(connection, "SELECT * FROM product")
@@ -45,259 +1018,13 @@ promotion <- dbGetQuery(connection, "SELECT * FROM promotion")
 orders <- dbGetQuery(connection, "SELECT * FROM orders")
 ```
 
-## Customer Profile
-
-### The Distribution of Customer's Gender
-
-```{sql, eval=TRUE, connection = connection}
-SELECT 
-    gender, 
-    COUNT(*) AS GenderCount,
-    ROUND((COUNT(*) * 100.0) / (SELECT COUNT(*) FROM customer), 2) AS Percentage
-FROM 
-    customer
-GROUP BY 
-    gender
-ORDER BY 
-    Percentage DESC;
-```
-
-### The Distribution of Customer's Age
-
-```{sql, eval=TRUE, connection = connection}
-SELECT 
-    AgeGroup, 
-    COUNT(*) AS Count,
-    CONCAT(ROUND((COUNT(*) * 100.0) / (SELECT COUNT(*) FROM customer), 2), '%') AS Percentage
-FROM (
-    SELECT 
-        customer_id,
-        CASE
-            WHEN age >= 0 AND age < 18 THEN '0-18'
-            WHEN age >= 18 AND age < 30 THEN '19-30'
-            WHEN age >= 30 AND age < 40 THEN '31-40'
-            WHEN age >= 40 AND age < 50 THEN '41-50'
-            WHEN age >= 50 AND age < 60 THEN '51-60'
-            WHEN age >= 60 AND age < 70 THEN '61-70'
-            WHEN age >= 70 THEN '71+'
-            ELSE 'Unknown'
-        END AS AgeGroup
-    FROM customer
-) AS AgeCategories
-GROUP BY AgeGroup
-ORDER BY Count DESC;
-```
-
-### The Distribution of Customer's Career (Top 10)
-
-```{sql, eval=TRUE, connection = connection}
-SELECT 
-    career, 
-    COUNT(*) AS CareerCount,
-    CONCAT(ROUND((COUNT(*) * 100.0) / (SELECT COUNT(*) FROM customer), 2), '%') AS Percentage
-FROM 
-    customer
-GROUP BY 
-    career
-ORDER BY 
-    CareerCount DESC
-LIMIT 10;
-```
-
-### The Distribution of Customer's Geographic Location (Top 10)
-
-```{sql, eval=TRUE, connection = connection}
-SELECT 
-    address_city, 
-    COUNT(*) AS CityCount,
-    CONCAT(ROUND((COUNT(*) * 100.0) / (SELECT COUNT(*) FROM customer), 2), '%') AS Percentage
-FROM 
-    customer
-GROUP BY 
-    address_city
-ORDER BY 
-    CityCount DESC
-LIMIT 10;
-```
-
-```{r Geographical Distribution of Customers}
-# Group by city and count the number of customer in each city
-customer_city_count <- customer %>%
-  group_by(address_city) %>%
-  summarise(number_of_customers = n()) %>%
-  arrange(desc(number_of_customers))
-
-# Specify the dimensions of the plot
-width <- 12 
-height <- 8
-
-# Use ggplot to create a bar chart showing the number of customers in each city
-g_customer <- ggplot(customer_city_count, 
-                     aes(x = reorder(address_city, -number_of_customers), 
-                         y = number_of_customers)) +
-  geom_col(fill = "dodgerblue") +
-  geom_text(aes(label = number_of_customers), 
-            position = position_dodge(width = 0.9), vjust = -0.2, 
-            size = 3.5) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 0.5, vjust = 0), 
-        axis.title = element_text(size = 12)) +
-  labs(title = "Number of Customers in each City",
-       x = "City",
-       y = "Number of Customers")
-print(g_customer)
-
-# Dynamically generate filename with current date and time
-filename <- paste0("geographical distribution of customers_", 
-                   format(Sys.time(), "%Y%m%d_%H%M%S"), ".png")
-
-# Save the plot with the dynamic filename
-ggsave(filename, plot = g_customer, width = width, height = height)
-```
-
-### The Current Customer Referral Rate
-
-```{sql, eval=TRUE, connection = connection}
-SELECT 
-    COUNT(CASE WHEN referred_by != '' AND referred_by IS NOT NULL THEN 1 END) AS Customer_with_Referral,
-    COUNT(*) AS total_customer,
-    CONCAT(ROUND((COUNT(CASE WHEN referred_by != '' AND referred_by IS NOT NULL THEN 1 END) * 100.0 / COUNT(*)), 2), '%') AS referral_rate
-FROM 
-    customer;
-```
-
-## Product Portfolio
-
-### The Distribution of Product's Review Score (Top 10)
-
-```{sql, eval=TRUE, connection = connection}
-SELECT 
-    product_name, review_score
-FROM 
-    product
-ORDER BY 
-    review_score DESC
-LIMIT 10;
-```
-
-### The Product Number supplied by Different Suppliers
-
-```{r the product number supplied by supplier}
-# Perform an inner join to combine 'product' with 'supplier' on 'supplier_id'
-joint_supplier_product <- inner_join(product, supplier, by = "supplier_id")
-
-# Group by supplier_name and count the number of products for each supplier
-product_count_by_supplier <- joint_supplier_product %>%
-  group_by(supplier_name) %>%
-  summarise(number_of_products = n())
-
-# Specify the dimensions of the plot
-width <- 12 
-height <- 8
-
-# Use ggplot to create a bar chart showing the number of products for each supplier
-g_supplier <- ggplot(product_count_by_supplier, aes(x = reorder(supplier_name, -number_of_products), y = number_of_products)) +
-  geom_col(fill = "steelblue") + 
-  geom_text(aes(label = number_of_products), position = position_dodge(width = 0.9), vjust = -0.2, size = 3.5) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
-  labs(title = "Number of Products by Supplier (Descending Order)",
-       x = "Supplier Name",
-       y = "Number of Products")
-print(g_supplier)
-
-# Dynamically generate filename with current date and time
-filename <- paste0("the product number supplied by supplier_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".png")
-
-# Save the plot with the dynamic filename
-ggsave(filename, plot = g_supplier, width = width, height = height)
-```
-
-### The Product's Review Score of Different Suppliers (Top Best 5)
-
-```{sql, eval=TRUE, connection = connection}
-SELECT s.supplier_name, ROUND(AVG(p.review_score), 2) AS average_review_score
-FROM product p
-JOIN supplier s ON p.supplier_id = s.supplier_id
-GROUP BY s.supplier_name
-ORDER BY average_review_score DESC
-LIMIT 5;
-```
-
-### The Product's Review Score of Different Suppliers (Top Worst 5)
-
-```{sql, eval=TRUE, connection = connection}
-SELECT s.supplier_name, ROUND(AVG(p.review_score), 2) AS average_review_score
-FROM product p
-JOIN supplier s ON p.supplier_id = s.supplier_id
-GROUP BY s.supplier_name
-ORDER BY average_review_score ASC
-LIMIT 5;
-```
-
-### The Top 10 Popular Product
-
-```{r Top 10 Popular Products}
-# Perform an inner join to combine 'orders' with 'product' on 'product_id'
-joint_order_product <- inner_join(orders, product, by = "product_id")
-
-# Calculate the total quantity sold for each product
-product_sales_volume <- joint_order_product %>%
-  group_by(product_name) %>%
-  summarise(total_quantity_sold = sum(quantity)) # Assuming 'quantity' exists in your orders dataset
-# Processing the text of product name
-product_sales_volume$product_name <- iconv(product_sales_volume$product_name, "UTF-8", "ASCII//TRANSLIT")
-
-# Choose only the top 10 products based on total quantity sold
-top_product_sales_volume <- product_sales_volume %>%
-  arrange(desc(total_quantity_sold)) %>%
-  slice_head(n = 10)
-
-# Specify the dimensions of the plot
-width <- 12
-height <- 8
-
-# Use ggplot to create a bar chart showing the total quantity sold for each product
-g_topproduct <- ggplot(top_product_sales_volume, aes(x = reorder(product_name, total_quantity_sold), y = total_quantity_sold)) +
-  geom_col(fill = "steelblue") +
-  geom_text(aes(label = total_quantity_sold), position = position_dodge(width = 0.9), hjust = -0.2, size = 3.5) +
-  coord_flip() +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1),
-        axis.title = element_text(size = 12)) +
-  labs(title = "Top 10 Bestselling Products",
-       x = "Product Name",
-       y = "Total Quantity Sold")
-print(g_topproduct)
-
-# Dynamically generate filename with current date and time
-filename <- paste0("top10_products_by_quantity_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".png")
-
-# Save the plot with the dynamic filename
-ggsave(filename, plot = g_topproduct, width = width, height = height)
-```
-
-## Sales Analysis
-
-### Order Refund Rate
-
-```{sql, eval=TRUE, connection = connection}
-SELECT 
-    COUNT(CASE WHEN refund_status = 'yes' THEN 1 END) AS refund_orders,
-    COUNT(*) AS total_orders,
-    CONCAT(ROUND((COUNT(CASE WHEN refund_status = 'yes' THEN 1 END) * 1.0 / COUNT(*)) * 100, 2), '%') AS refund_rate_percentage
-FROM (
-    SELECT DISTINCT order_id, refund_status
-    FROM orders
-) AS unique_orders;
-```
-
-# Advanced Analysis
-
-### Promotion Discount Trend
+### 4.1.1 Promotion Discount Trend
 
 ```{r promotion discount trend & promotion count trend}
 # Convert Date Format
 promotion <- promotion %>%
-  mutate(promotion_start_date = as.Date(promotion_start_date),
-         promotion_end_date = as.Date(promotion_end_date))
+  mutate(promotion_start_date = dmy(promotion_start_date),
+         promotion_end_date = dmy(promotion_end_date))
 
 # Generate records for each month that each promotion spans
 data_expanded <- promotion %>%
@@ -338,7 +1065,7 @@ filename <- paste0("promotion_discount_trend_", format(Sys.time(), "%Y%m%d_%H%M%
 ggsave(filename, plot = g_promotionvalue, width = width, height = height)
 ```
 
-### Promotion Count Trend
+### 4.1.2 Promotion Count Trend
 
 ```{r Promotion Count Trend}
 # Calculate the number of times a promotion appears in each month
@@ -364,14 +1091,18 @@ filename <- paste0("promotion_number_trend_", format(Sys.time(), "%Y%m%d_%H%M%S"
 ggsave(filename, plot = g_promotioncount, width = width, height = height)
 ```
 
-### Monthly Revenue Trend
+#### Promotion Analysis
+
+The above graphs illustrate the highest discounts that were offered during January and February, i.e. 53% off on the product price. However, more promotional events were offered in other months to attract more customers to shop through our website.
+
+### 4.1.3 Monthly Revenue Trend
 
 ```{r Revenue in each month}
 # Preprocessed date formats
-orders <- orders %>% mutate(order_date = as.Date(order_date))
+orders <- orders %>% mutate(order_date = dmy(order_date))
 promotion <- promotion %>%
-  mutate(start_date = as.Date(promotion_start_date),
-         end_date = as.Date(promotion_end_date),
+  mutate(start_date = promotion_start_date,
+         end_date = promotion_end_date,
          promotion_discount_value = if_else(is.na(promotion_discount_value), 0, promotion_discount_value))
 
 # Merge orders with products for pricing information
@@ -400,14 +1131,13 @@ monthly_revenue <- order_products_promotions %>%
   summarize(total_revenue = sum(revenue, na.rm = TRUE))
 
 # Visualisation of monthly income
-g_monthlyrevenue <- ggplot(monthly_revenue, aes(x = month, y = total_revenue)) +
+(g_monthlyrevenue <- ggplot(monthly_revenue, aes(x = month, y = total_revenue)) +
   geom_line(color = "steelblue") +
   geom_point() +
   scale_x_date(date_labels = "%b %Y", date_breaks = "1 month") +  
   geom_text(aes(label = sprintf("%.2f", total_revenue)), position = position_dodge(width = 0.9), vjust = -0.5, size = 3.5) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
-  labs(title = "Monthly Revenue", x = "Month", y = "Revenue")
-print(g_monthlyrevenue)
+  labs(title = "Monthly Revenue", x = "Month", y = "Revenue"))
 
 # Dynamically generate filename with current date and time
 filename <- paste0("monthly_revenue_", 
@@ -417,7 +1147,11 @@ filename <- paste0("monthly_revenue_",
 ggsave(filename, plot = g_monthlyrevenue, width = width, height = height)
 ```
 
-### Monthly Best-Selling Products
+#### Monthly Revenue Analysis
+
+By analysing the revenue in 2023 and 2024, it is observed that the month of April in 2023 records the highest revenue, credited to the promotion event with a high discount rate, followed by revenue in December 2023. Although no attractive discount offers were applied in the month of December 2023, still an outstanding revenue was observed because of the festive season in the United Kingdom.
+
+### 4.1.4 Monthly Best-Selling Products
 
 ```{r Best-Selling Products by Month}
 # Calculate total monthly revenue per product
@@ -471,12 +1205,16 @@ kable(table_to_display, caption = "Monthly Best-Selling Products", col.names = c
 
 ```
 
-### Monthly Shipping Efficiency
+#### Monthly Best-Selling Products Analysis
+
+It is observed that Wall Paint Olympic One has become the top best-selling product in 2023 April which creates an extremely high revenue for the e-commerce company.
+
+### 4.1.5 Monthly Shipping Efficiency
 
 ```{r Monthly Shipping Efficiency}
+## Monthly Shipping Efficiency
 # Convert dates to Date objects
-orders$order_date <- as.Date(orders$order_date)
-shipment$shipment_date <- as.Date(shipment$shipment_date)
+shipment$shipment_date <- as.Date(shipment$shipment_date, origin = "1970-01-01")
 
 shipment_unique <- shipment %>% distinct(shipment_id, .keep_all = TRUE)
 
@@ -514,6 +1252,8 @@ g_shiping_efficiency <- ggplot(monthly_stats, aes(x = month)) +
   labs(title = "Monthly Shipping Duration",
        x = "Month", y = "Shipping Duration (days)")
 
+print(g_shiping_efficiency)
+
 # Dynamically generate filename with current date and time
 filename <- paste0("monthly_shiping_efficiency_", 
                    format(Sys.time(), "%Y%m%d_%H%M%S"), ".png")
@@ -522,11 +1262,12 @@ filename <- paste0("monthly_shiping_efficiency_",
 ggsave(filename, plot = g_shiping_efficiency, width = width, height = height)
 ```
 
-### Monthly Delivery Efficiency
+### 4.1.6 Monthly Delivery Efficiency
 
 ```{r Monthly Delivery Efficiency}
+## Monthly Delivery Efficiency
 # Convert dates to Date objects
-shipment$delivery_date <- as.Date(shipment$delivery_date)
+shipment$delivery_date <- as.Date(shipment$delivery_date, origin = "1970-01-01")
 
 shipment_unique <- shipment %>% distinct(shipment_id, .keep_all = TRUE)
 
@@ -548,21 +1289,25 @@ table_to_display <- monthly_stats %>%
   mutate(Time = format(month, "%Y-%m")) %>% 
   select(Time, Average_Delivery_Duration, Min_Delivery_Duration, Max_Delivery_Duration)
 
+# Calculate the overall average delivery duration
+overall_avg_delivery <- mean(combined_data$delivery_duration, na.rm = TRUE)
+
 # Display the table with kable
 kable(table_to_display, caption = "Monthly Delivery Duration", col.names = c("Time", "Average Duration", "Min Duration", "Max Duration"))
 
 # Visualize the statistics
 g_delivery_efficiency <- ggplot(monthly_stats, aes(x = month)) +
-  geom_line(aes(y = Average_Delivery_Duration), color = "steelblue", size = 1) +
-  geom_text(aes(y = Average_Delivery_Duration, 
-                label = sprintf("%.2f", Average_Delivery_Duration)), 
-            position = position_dodge(width = 0.9), vjust = -0.5, size = 3.5) +
-  scale_x_date(date_labels = "%b %Y", 
-               date_breaks = "1 month",
-               limits = c(min(monthly_stats$month), max(monthly_stats$month))) + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(title = "Monthly Delivery Duration",
-       x = "Month", y = "Delivery Duration (days)")
+    geom_line(aes(y = Average_Delivery_Duration), color = "steelblue", size = 1) +
+    geom_text(aes(y = Average_Delivery_Duration, 
+                  label = sprintf("%.2f", Average_Delivery_Duration)), 
+              position = position_dodge(width = 0.9), vjust = -0.5, size = 3.5) +
+    scale_x_date(date_labels = "%b %Y", 
+                 date_breaks = "1 month",
+                 limits = c(min(monthly_stats$month), max(monthly_stats$month))) + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(title = "Monthly Delivery Duration",
+         x = "Month", y = "Delivery Duration (days)")
+print(g_delivery_efficiency)
 
 # Dynamically generate filename with current date and time
 filename <- paste0("monthly_delivery_efficiency_", 
@@ -571,3 +1316,277 @@ filename <- paste0("monthly_delivery_efficiency_",
 # Save the plot with the dynamic filename
 ggsave(filename, plot = g_delivery_efficiency, width = width, height = height)
 ```
+
+#### Shipping and Delivery Efficiency Analysis
+
+From the above analysis it is observed that the average duration ranges between 0.30 and 0.77 days for shipment efficiency and ranges between 2.54 and 3.58 days for delivery efficiency. Both indicates the efficient capability of processing parcels for the customers.
+
+## 4.2 **Comprehensive Reporting with Quarto**
+
+### 4.2.1 Demographic Distribution of Customers
+
+#### A. The Distribution of Gender across Customers
+
+```{sql, eval=TRUE, connection = connection}
+SELECT 
+    gender, 
+    COUNT(*) AS GenderCount,
+    CONCAT(ROUND((COUNT(*) * 100.0) / (SELECT COUNT(*) FROM customer), 2), '%') AS Percentage
+FROM 
+    customer
+GROUP BY 
+    gender
+ORDER BY 
+    Percentage DESC;
+```
+
+#### B. The Distribution of Age across Customers
+
+```{sql, eval=TRUE, connection = connection}
+SELECT 
+    AgeGroup, 
+    COUNT(*) AS Count,
+    CONCAT(ROUND((COUNT(*) * 100.0) / (SELECT COUNT(*) FROM customer), 2), '%') AS Percentage
+FROM (
+    SELECT 
+        customer_id,
+        CASE
+            WHEN age >= 0 AND age < 18 THEN '0-18'
+            WHEN age >= 18 AND age < 30 THEN '19-30'
+            WHEN age >= 30 AND age < 40 THEN '31-40'
+            WHEN age >= 40 AND age < 50 THEN '41-50'
+            WHEN age >= 50 AND age < 60 THEN '51-60'
+            WHEN age >= 60 AND age < 70 THEN '61-70'
+            WHEN age >= 70 THEN '71+'
+            ELSE 'Unknown'
+        END AS AgeGroup
+    FROM customer
+) AS AgeCategories
+GROUP BY AgeGroup
+ORDER BY Count DESC;
+```
+
+#### C. The Distribution of Careers across Customers (Top 10)
+
+```{sql, eval=TRUE, connection = connection}
+SELECT 
+    career, 
+    COUNT(*) AS CareerCount,
+    CONCAT(ROUND((COUNT(*) * 100.0) / (SELECT COUNT(*) FROM customer), 2), '%') AS Percentage
+FROM 
+    customer
+GROUP BY 
+    career
+ORDER BY 
+    CareerCount DESC
+LIMIT 10;
+```
+
+#### D. The Distribution of Geographic Location across Customers (Top 10)
+
+```{sql, eval=TRUE, connection = connection}
+SELECT 
+    address_city, 
+    COUNT(*) AS CityCount,
+    CONCAT(ROUND((COUNT(*) * 100.0) / (SELECT COUNT(*) FROM customer), 2), '%') AS Percentage
+FROM 
+    customer
+GROUP BY 
+    address_city
+ORDER BY 
+    CityCount DESC
+LIMIT 10;
+```
+
+```{r Geographical Distribution of Customers}
+# Group by city and count the number of customer in each city
+customer_city_count <- customer %>%
+  group_by(address_city) %>%
+  summarise(number_of_customers = n()) %>%
+  arrange(desc(number_of_customers))
+
+# Specify the dimensions of the plot
+width <- 12 
+height <- 8
+
+# Use ggplot to create a bar chart showing the number of customers in each city
+g_customer <- ggplot(customer_city_count, 
+                     aes(x = reorder(address_city, -number_of_customers), 
+                         y = number_of_customers)) +
+  geom_col(fill = "dodgerblue") +
+  geom_text(aes(label = number_of_customers), 
+            position = position_dodge(width = 0.9), vjust = -0.2, 
+            size = 3.5) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 0.5, vjust = 0), 
+        axis.title = element_text(size = 12)) +
+  labs(title = "Number of Customers in each City",
+       x = "City",
+       y = "Number of Customers")
+print(g_customer)
+
+# Dynamically generate filename with current date and time
+filename <- paste0("geographical distribution of customers_", 
+                   format(Sys.time(), "%Y%m%d_%H%M%S"), ".png")
+
+# Save the plot with the dynamic filename
+ggsave(filename, plot = g_customer, width = width, height = height)
+```
+
+#### E. The Current Customer Referral Rate
+
+```{sql, eval=TRUE, connection = connection}
+SELECT 
+    COUNT(CASE WHEN referred_by != '' AND referred_by IS NOT NULL THEN 1 END) AS Customer_with_Referral,
+    COUNT(*) AS total_customer,
+    CONCAT(ROUND((COUNT(CASE WHEN referred_by != '' AND referred_by IS NOT NULL THEN 1 END) * 100.0 / COUNT(*)), 2), '%') AS referral_rate
+FROM 
+    customer;
+```
+
+#### Customer Analysis
+
+The gender of the customers is quite evenly distributed, with 55% males and 45% females and their age is mainly located in the senior group, who are in the age group of 31-40 years and 41-50 years, accounting for 34% and 29%, of males and females respectively. Young adults aged between 19-30 also comprise approximately 24% of the customers.\
+\
+The career distribution, states that customers are employeed in diverse industries and have different job positions, but most of them have high number of working experience according to their job titles.
+
+The customers currently live in big cities around the United Kingdom, represents people living in big cities who shop online more frequently.
+
+Reviewing the customer referral rate, it is observed that 37% of customers are referred by existing customers, showing a moderate satisfaction level from our customers.
+
+### 4.2.2 Product Portfolio
+
+#### A. The Distribution of Product Review Scores (Top 10)
+
+```{sql, eval=TRUE, connection = connection}
+SELECT 
+    product_name, review_score
+FROM 
+    product
+ORDER BY 
+    review_score DESC
+LIMIT 10;
+```
+
+#### B. The Number of Products supplied by Different Suppliers
+
+```{r the product number supplied by supplier}
+# Perform an inner join to combine 'product' with 'supplier' on 'supplier_id'
+joint_supplier_product <- inner_join(product, supplier, by = "supplier_id")
+
+# Group by supplier_name and count the number of products for each supplier
+product_count_by_supplier <- joint_supplier_product %>%
+  group_by(supplier_name) %>%
+  summarise(number_of_products = n())
+
+# Specify the dimensions of the plot
+width <- 12 
+height <- 8
+
+# Use ggplot to create a bar chart showing the number of products for each supplier
+g_supplier <- ggplot(product_count_by_supplier, aes(x = reorder(supplier_name, -number_of_products), y = number_of_products)) +
+  geom_col(fill = "steelblue") + 
+  geom_text(aes(label = number_of_products), position = position_dodge(width = 0.9), vjust = -0.2, size = 3.5) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(title = "Number of Products by Supplier (Descending Order)",
+       x = "Supplier Name",
+       y = "Number of Products")
+print(g_supplier)
+
+# Dynamically generate filename with current date and time
+filename <- paste0("the product number supplied by supplier_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".png")
+
+# Save the plot with the dynamic filename
+ggsave(filename, plot = g_supplier, width = width, height = height)
+```
+
+#### C. The Product Review Scores of Different Suppliers (Best Top 5)
+
+```{sql, eval=TRUE, connection = connection}
+SELECT s.supplier_name, ROUND(AVG(p.review_score), 2) AS average_review_score
+FROM product p
+JOIN supplier s ON p.supplier_id = s.supplier_id
+GROUP BY s.supplier_name
+ORDER BY average_review_score DESC
+LIMIT 5;
+```
+
+#### D. The Product Review Scores of Different Suppliers (Worst Top 5)
+
+```{sql, eval=TRUE, connection = connection}
+SELECT s.supplier_name, ROUND(AVG(p.review_score), 2) AS average_review_score
+FROM product p
+JOIN supplier s ON p.supplier_id = s.supplier_id
+GROUP BY s.supplier_name
+ORDER BY average_review_score ASC
+LIMIT 5;
+```
+
+#### E. The Top 10 Best Selling Products
+
+```{r Top 10 Popular Products}
+# Perform an inner join to combine 'orders' with 'product' on 'product_id'
+joint_order_product <- inner_join(orders, product, by = "product_id")
+
+# Calculate the total quantity sold for each product
+product_sales_volume <- joint_order_product %>%
+  group_by(product_name) %>%
+  summarise(total_quantity_sold = sum(quantity)) # Assuming 'quantity' exists in your orders dataset
+# Processing the text of product name
+product_sales_volume$product_name <- iconv(product_sales_volume$product_name, "UTF-8", "ASCII//TRANSLIT")
+
+# Choose only the top 10 products based on total quantity sold
+top_product_sales_volume <- product_sales_volume %>%
+  arrange(desc(total_quantity_sold)) %>%
+  slice_head(n = 10)
+
+# Specify the dimensions of the plot
+width <- 12
+height <- 8
+
+# Use ggplot to create a bar chart showing the total quantity sold for each product
+g_topproduct <- ggplot(top_product_sales_volume, aes(x = reorder(product_name, total_quantity_sold), y = total_quantity_sold)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = total_quantity_sold), position = position_dodge(width = 0.9), hjust = -0.2, size = 3.5) +
+  coord_flip() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        axis.title = element_text(size = 12)) +
+  labs(title = "Top 10 Bestselling Products",
+       x = "Product Name",
+       y = "Total Quantity Sold")
+print(g_topproduct)
+
+# Dynamically generate filename with current date and time
+filename <- paste0("top10_products_by_quantity_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".png")
+
+# Save the plot with the dynamic filename
+ggsave(filename, plot = g_topproduct, width = width, height = height)
+```
+
+#### Supplier Analysis
+
+The analysis shows that the products are supplied by various suppliers, ranging from household items, fashion stores, and toy wholesalers to fitness equipment suppliers. The e-commerce platform has a diversity of products to attract more potential customers. Breaking down into the suppliers' satisfaction, the top five have more than 3.5 out of 5 scores, and the worst five have approximately 3 scores, with no significant difference among the suppliers currently. Considering the product quality, suppliers with much higher product quality could be contacted further.
+
+#### Product Analysis
+
+The reviewed scores shows that the top 10 products are mainly from the product category electronic devices and household items such as refrigerators, T-shirt,etc
+
+### 4.2.3 Sales Analysis
+
+#### A. Order Refund Rate
+
+```{sql, eval=TRUE, connection = connection}
+SELECT 
+    COUNT(CASE WHEN refund_status = 'yes' THEN 1 END) AS refund_orders,
+    COUNT(*) AS total_orders,
+    CONCAT(ROUND((COUNT(CASE WHEN refund_status = 'yes' THEN 1 END) * 1.0 / COUNT(*)) * 100, 2), '%') AS refund_rate_percentage
+FROM (
+    SELECT DISTINCT order_id, refund_status
+    FROM orders
+) AS unique_orders;
+```
+
+#### Order Refund Analysis
+
+The order refund rate is 39.07%, higher than the IMRG's 2020 ([benchmarking data](https://orderwise.co.uk/en/blog/returns-and-ecommerce-five-facts-and-figures-for-2023)); the average e-commerce business saw a 15% return rate. Refunding rates can damage the reputation of the business since when customers see high refund rates; they may be less likely to purchase the products in the future.
+
+### 
