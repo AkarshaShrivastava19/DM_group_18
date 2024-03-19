@@ -688,75 +688,123 @@ if (nrow(promotion_possible_data) > 0)
 
 #Validations for product data
 
-    validate_and_prepare_product_data <- function(data) {
+    # function to validate and check referential integrity  
+    validate_and_prepare_product_data <- function(data, connection) {
+      
       # Validation for product ID
       product_id_check <- grepl("^[A-Za-z0-9]{10}$", data$product_id)
       data <- data[product_id_check, ]
-      # Performing validation checks here
+      # Performing validation for review score 
       data <- data[data$review_score >= 1 & data$review_score <= 5, ]
+      
+      # Fetch existing IDs from reference tables
+      valid_category_ids <- dbGetQuery(connection, "SELECT category_id FROM category")$category_id
+      valid_supplier_ids <- dbGetQuery(connection, "SELECT supplier_id FROM supplier")$supplier_id
+      valid_promotion_ids <- c(dbGetQuery(connection, "SELECT promotion_id FROM promotion")$promotion_id, NA)
+      
+      # Referential integrity checks
+      data <- data[data$category_id %in% valid_category_ids, ]
+      data <- data[data$supplier_id %in% valid_supplier_ids, ]
+      data <- data[is.na(data$promotion_id) | data$promotion_id %in% valid_promotion_ids, ]
+      
+      # Validation for non-negative and integer quantity_stock and quantity_supplied
+      data <- data[data$quantity_stock >= 0 & !is.na(data$quantity_stock) & (data$quantity_stock == floor(data$quantity_stock)), ]
+      data <- data[data$quantity_supplied >= 0 & !is.na(data$quantity_supplied) & (data$quantity_supplied == floor(data$quantity_supplied)), ]
+      
+      # Validation for positive price values
+      data <- data[data$price > 0 & !is.na(data$price), ]
+      
+      # Validation to ensure product_name is not empty
+      data <- data[data$product_name != "" & !is.na(data$product_name), ]
       
       return(data)
     }
     
     
-    # Fetch existing product IDs from the database
+    # Fetch existing product IDs from the database into a vector
+    existing_product_ids <- tryCatch({
+      dbGetQuery(connection, "SELECT product_id FROM product")$product_id
+    }, error = function(e) {
+      cat("Error fetching existing product IDs: ", e$message, "\n")
+      NULL
+    })
     
+    # List files that have 'product' in title   
     product_file_paths <- list.files(path = "data_upload", pattern = "product.*\\.csv$", full.names = TRUE)
-    
-    # Define the primary key column for the product table
-    product_primary_key <- "product_id"
-    
-    #Initialising empty data frame
+    # Initialising temporary empty data frame for future loading 
     product_possible_data <- data.frame() 
     
-    
-    # Read each product CSV file and check for the existence of the primary key in the database before appending
+    # Read each product CSV file 
     for (file_path in product_file_paths) {
-      
       cat("Starting processing file:", file_path, "\n")
-      
       # Read the current file
-      product_data <- readr::read_csv(file_path)
+      product_data <- tryCatch({ 
+        readr::read_csv(file_path)
+      }, error = function(e) {
+        cat("Error reading file", file_path, ": ", e$message, "\n")
+        next  # Skip to the next iteration of the loop
+      })
       
-      # Iterate through each row of the file
+      # Iterate through each row of the file and check for uniqueness of primary key in database and in temprorary df
       for (i in seq_len(nrow(product_data))) {
         new_record <- product_data[i, ]
-        primary_key_value <- new_record[[product_primary_key]]
-        conditions <- paste(product_primary_key, "=", paste0("'", primary_key_value, "'"))
+        primary_key_value <- new_record[["product_id"]]
         
-        # Check if a record with the same primary key exists in the database
-        record_exists_query <- paste("SELECT COUNT(*) FROM product WHERE", conditions)
-        record_exists_result <- dbGetQuery(connection, record_exists_query)
-        record_exists <- record_exists_result[1, 1] > 0
-        
-        if(record_exists) {
-          cat("Record with primary key", primary_key_value, "already exists in the database.\n")
-        }  
-        if (!record_exists) {
-          # Check if the primary key value of the new record is unique in the temporary dataframe
-          if (!primary_key_value %in% product_possible_data[[product_primary_key]]) {
+        if (!primary_key_value %in% existing_product_ids) {
+          if (!primary_key_value %in% product_possible_data[["product_id"]]) {
             product_possible_data <- rbind(product_possible_data, new_record)
           }
+        } else {
+          cat("Record with primary key", primary_key_value, "already exists in the database.\n")
         }
-        
-        cat("Finished processing file:", file_path, "\n")
-        
       }
-    }
-        cat("Starting validation for new records.\n")
-        product_possible_data <- validate_and_prepare_product_data(product_possible_data)
-        cat("Validation completed for new records.\n")
+      cat("Finished processing file:", file_path, "\n")
+    }    
     
-    if (nrow(product_possible_data) > 0) 
-    {
+    # Call for validation and integrity check function    
+    cat("Starting validation for new records.\n")
+    product_possible_data <- validate_and_prepare_product_data(product_possible_data, connection)
+    cat("Validation completed for new records.\n")
+    
+    # Implementing data integrity check for validated and ready to loading data for each row 
+    product_possible_data <- product_possible_data[order(product_possible_data$product_id), ]
+    pre_load_hashes <- sapply(1:nrow(product_possible_data), function(i) {
+      record <- as.character(unlist(product_possible_data[i, ]))
+      digest(paste(record, collapse = "|"), algo = "md5")
+    })
+    
+    # Ingesting into database command    
+    if (nrow(product_possible_data) > 0) {
       cat("Starting to insert validated data into the database. Number of records: ", nrow(product_possible_data), "\n")
-      # Digesting prepared data to our database
-      dbWriteTable(connection, name = "product", value = product_possible_data, append = TRUE, row.names = FALSE)
-      cat("Data insertion completed successfully.\n")
-    } else 
-    {
+      
+      # Ingesting prepared data to our database
+      tryCatch({
+        dbWriteTable(connection, name = "product", value = product_possible_data, append = TRUE, row.names = FALSE)
+        cat("Data insertion completed successfully.\n")
+      }, error = function(e) {
+        cat("Error inserting data into the database: ", e$message, "\n")
+        # Additional error handling logic here
+      }) 
+      
+      # Fetch the loaded data back for post-load hash comparison
+      loaded_product_ids <- sprintf("'%s'", product_possible_data$product_id)
+      query <- sprintf("SELECT * FROM product WHERE product_id IN (%s) ORDER BY product_id", paste(loaded_product_ids, collapse = ", "))
+      retrieved_products <- dbGetQuery(connection, query)
+      # Creating hashes for retrieved data from db    
+      post_load_hashes <- sapply(1:nrow(retrieved_products), function(i) {
+        record <- as.character(unlist(retrieved_products[i, ]))
+        digest(paste(record, collapse = "|"), algo = "md5")
+      })
+      # Compare hashes for pre-loaded and retrieved-loaded data
+      identical_hashes_product <- all(pre_load_hashes == post_load_hashes)
+      if (identical_hashes_product) {
+        cat("Data integrity verified: All record hashes match.\n")
+      } else {
+        cat("Data integrity check failed: Record hashes do not match.\n")
+      }
+    } else {
       cat("No valid product data to insert into the database.\n")
-    }
+    } 
     
         
 
