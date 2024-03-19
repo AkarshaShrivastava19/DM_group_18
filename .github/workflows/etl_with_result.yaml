@@ -37,7 +37,7 @@ jobs:
       
       - name: Execute R script for automation analysis
         run: |
-          Rscript R/Analysis.R
+          Rscript R/Analysis1.R
 
       - name: Commit and Push Analysis Results
         run: |
