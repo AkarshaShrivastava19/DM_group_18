@@ -850,6 +850,34 @@ if (nrow(promotion_possible_data) > 0)
     
     
     # Validation of orders table
+    # Function to check if given foreign IDs of orders data exist in their respective tables
+    check_id_exists <- function(connection, table_name, column_name, ids) {
+      query_template <- "SELECT DISTINCT %s FROM %s WHERE %s IN (%s)"
+      query <- sprintf(query_template, column_name, table_name, column_name, paste0("'", ids, "'", collapse = ", "))
+      existing_ids <- dbGetQuery(connection, query)[[1]]
+      all(ids %in% existing_ids)
+    }
+    
+    # Function to validate that foreign keys of 'orders' are existing in respective tables
+    validate_referential_integrity <- function(new_record) {
+      customer_exists <- check_id_exists(connection, "customer", "customer_id", new_record$customer_id)
+      product_exists <- check_id_exists(connection, "product", "product_id", new_record$product_id)
+      shipment_exists <- check_id_exists(connection, "shipment", "shipment_id", new_record$shipment_id)
+      
+      if(product_exists & customer_exists & shipment_exists) {
+        return(TRUE)
+      } else {
+        if(!customer_exists) cat("Customer ID does not exist:", new_record$customer_id, "\n")
+        if(!product_exists) cat("Product ID does not exist:", new_record$product_id, "\n")
+        if(!shipment_exists) cat("Shipment ID does not exist:", new_record$shipment_id, "\n")
+        return(FALSE)
+      }
+    }
+    
+    
+    
+    # Validation of orders table
+    
     validate_and_prepare_orders_data <- function(data){
       # Checking format of order id  
       order_id_check <- grepl("^ORDER[0-9]{9}$", data$order_id)
@@ -889,7 +917,7 @@ if (nrow(promotion_possible_data) > 0)
     
     # Read each orders CSV file and check for the existence of the composite primary key in the database before appending
     for (file_path in orders_file_paths) {
-      orders_data <- readr::read_csv(file_path)
+      orders_data <- readr::read_csv(file_path, show_col_types = FALSE)
       cat("Starting processing file:", file_path, "\n")   
       # Iterate through each row of the file
       for (i in seq_len(nrow(orders_data))) {
@@ -936,13 +964,16 @@ if (nrow(promotion_possible_data) > 0)
     cat("Validation completed for new records.\n")
     
     # Sorting the data to maintain ordering 
-    orders_possible_data <- orders_possible_data[order(orders_possible_data$order_id, orders_possible_data$product_id, orders_possible_data$customer_id, 
-                                                       orders_possible_data$shipment_id), ]
-    # Hashing the ready to upload data for data integrity check 
-    pre_load_hashes <- sapply(1:nrow(orders_possible_data), function(i) {
-      record <- as.character(unlist(orders_possible_data[i, ]))
-      digest(paste(record, collapse = "|"), algo = "md5")
-    })
+    if (nrow(orders_possible_data) > 0) {
+      orders_possible_data <- orders_possible_data[order(orders_possible_data$order_id, orders_possible_data$product_id, orders_possible_data$customer_id, 
+                                                         orders_possible_data$shipment_id), ]
+      
+      # Hashing the ready to upload data for data integrity check 
+      pre_load_hashes <- sapply(1:nrow(orders_possible_data), function(i) {
+        record <- as.character(unlist(orders_possible_data[i, ]))
+        digest(paste(record, collapse = "|"), algo = "md5")
+      })
+    }
     
     # Orders ingestion
     if (nrow(orders_possible_data) > 0) {
