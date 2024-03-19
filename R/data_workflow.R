@@ -562,20 +562,20 @@ if (nrow(promotion_possible_data) > 0)
       # # Validation for shipment ID
       shipment_id_check <- grepl("^SHIP[0-9]{6}$", data$shipment_id)
       data <- data[shipment_id_check,]
-      
+
       # Convert dates from character to Date object
-      data$shipment_date <- as.Date(data$shipment_date, format = "%d-%m-%Y")
-      data$delivery_date <- as.Date(data$delivery_date, format = "%d-%m-%Y")
-      
+      data$shipment_date <- as.Date(data$shipment_date, format = "%d/%m/%Y")
+      data$delivery_date <- as.Date(data$delivery_date, format = "%d/%m/%Y")
+
       # Validation for shipment_date and delivery_date format
       date_format_check <- !is.na(data$shipment_date) & !is.na(data$delivery_date)
-      
+
       # Keep only rows with valid date formats
       data <- data[date_format_check,]
-      
+
       # Validation for logical order of shipment and delivery dates
       logical_date_order_check <- data$shipment_date <= data$delivery_date
-      
+
       # Keep only rows with logical date order
       data <- data[logical_date_order_check,]
       
