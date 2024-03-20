@@ -717,9 +717,14 @@ validate_and_prepare_product_data <- function(data, connection) {
   data <- data[data$supplier_id %in% valid_supplier_ids, ]
   data <- data[is.na(data$promotion_id) | data$promotion_id %in% valid_promotion_ids, ]
   
-  # Validation for non-negative and integer quantity_stock and quantity_supplied
-  data <- data[data$quantity_stock >= 0 & !is.na(data$quantity_stock) & (data$quantity_stock == floor(data$quantity_stock)), ]
-  data <- data[data$quantity_supplied >= 0 & !is.na(data$quantity_supplied) & (data$quantity_supplied == floor(data$quantity_supplied)), ]
+  # Convert quantity_stock and quantity_supplied to numeric to ensure
+  # non-numeric values are handled. This introduces NA for any non-numeric values.
+  data$quantity_stock <- as.numeric(data$quantity_stock)
+  data$quantity_supplied <- as.numeric(data$quantity_supplied)
+  
+  # Now proceed with the validations for non-negative, non-NA, and integer for quantity_stock and quantity_supplied
+  data <- data[!is.na(data$quantity_stock) & data$quantity_stock >= 0 & (data$quantity_stock == floor(data$quantity_stock)), ]
+  data <- data[!is.na(data$quantity_supplied) & data$quantity_supplied >= 0 & (data$quantity_supplied == floor(data$quantity_supplied)), ]
   
   # Validation for positive price values
   data <- data[data$price > 0 & !is.na(data$price), ]
@@ -777,7 +782,11 @@ product_possible_data <- validate_and_prepare_product_data(product_possible_data
 cat("Validation completed for new records.\n")
 
 # Implementing data integrity check for validated and ready to loading data for each row 
-product_possible_data <- product_possible_data[order(product_possible_data$product_id), ]
+if ("product_id" %in% names(product_possible_data) && nrow(product_possible_data) > 0) {
+  product_possible_data <- product_possible_data[order(product_possible_data$product_id), ]
+} else {
+  cat("product_id column not found or product_possible_data is empty.\n")
+}
 pre_load_hashes <- sapply(1:nrow(product_possible_data), function(i) {
   record <- as.character(unlist(product_possible_data[i, ]))
   digest(paste(record, collapse = "|"), algo = "md5")
