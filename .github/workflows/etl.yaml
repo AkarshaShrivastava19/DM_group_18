@@ -1,8 +1,8 @@
 name: ETL Workflow Group 18
 
 on:
-#  schedule:
-#    - cron: '0 */3 * * *' # Run every 3 hours
+  schedule:
+    - cron: '0 */6 * * *' # Run every 6 hours
   push:
     branches: [ main ]
 
